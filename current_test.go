@@ -1,7 +1,10 @@
 package main
+
 import (
 	"testing"
-	. "github.com/smartystreets/goconvey/convey")
+
+	. "github.com/smartystreets/goconvey/convey"
+)
 
 func TestCurrentState(t *testing.T) {
 	Convey("1 should equal 1", t, func() {
@@ -14,15 +17,21 @@ func TestCurrentState(t *testing.T) {
 		So(sysState.scalar.VarID, ShouldBeZeroValue)
 		So(sysState.scalar.TimePoint, ShouldBeZeroValue)
 	})
-	Convey("Run init_system_state", t, func(){
-		init_system_state()
+	Convey("Test eventReader", t, func() {
+		ev, err := eventReader("test")
+		So(ev, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+	})
+	Convey("Run loadSystemState", t, func() {
+		ch := make(chan string)
+		loadSystemState(ch)
 		So(sysState, ShouldNotBeNil)
 		So(sysState.scalar.Value, ShouldEqual, 1.0)
 		So(sysState.scalar.BoxID, ShouldEqual, 1)
 		So(sysState.scalar.VarID, ShouldEqual, 1)
 		So(sysState.scalar.TimePoint, ShouldEqual, 1)
 	})
-	Convey("Run main", t, func(){
+	Convey("Run main", t, func() {
 		main()
 		So(sysState, ShouldNotBeNil)
 		So(sysState.scalar.Value, ShouldEqual, 1.0)
