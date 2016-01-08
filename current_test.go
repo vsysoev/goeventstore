@@ -1,10 +1,42 @@
 package main
 
 import (
+	"encoding/json"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
+
+type (
+	PositiveEventReader struct{}
+)
+
+func NewPositiveEventReader() EventReader {
+	return &PositiveEventReader{}
+}
+
+func (e *PositiveEventReader) Dial(url string) error {
+	return nil
+}
+
+func (e *PositiveEventReader) SetEventStore(dbName string, colName string) {
+
+}
+func (e *PositiveEventReader) ReadEvents(fromId string, outQueue chan string) error {
+	return nil
+}
+func (e *PositiveEventReader) Close() {
+	return
+}
+
+func TestJSONUnmarshalling(t *testing.T) {
+	Convey("Simple json unmarshalling", t, func() {
+		simpleJson := "{\"name\":\"value\"}"
+		var objmap interface{}
+		err := json.Unmarshal([]byte(simpleJson), &objmap)
+		So(err, ShouldBeNil)
+	})
+}
 
 func TestCurrentState(t *testing.T) {
 	Convey("1 should equal 1", t, func() {
@@ -17,10 +49,31 @@ func TestCurrentState(t *testing.T) {
 		So(sysState.scalar.VarID, ShouldBeZeroValue)
 		So(sysState.scalar.TimePoint, ShouldBeZeroValue)
 	})
-	Convey("Test eventReader", t, func() {
-		ev, err := eventReader("test")
-		So(ev, ShouldNotBeNil)
+	Convey("Test MongoEventReader", t, func() {
+		mng := NewMongoEventReader()
+		So(mng, ShouldNotBeNil)
+		err := mng.Dial("mongodb://127.0.0.1/test")
 		So(err, ShouldBeNil)
+	})
+	Convey("Test CommitEvent of MongoEventWriter", t, func() {
+		mng := NewMongoEventWriter()
+		So(mng, ShouldNotBeNil)
+		err := mng.Dial("mongodb://127.0.0.1/test")
+		So(err, ShouldBeNil)
+		mng.SetEventStore("test", "events")
+		err = mng.CommitEvent("{\"test\":\"value\"}")
+		So(err, ShouldBeNil)
+		err = mng.CommitEvent("{\"array\":[\"123\",\"345\", 45, 3445.456]}")
+		So(err, ShouldBeNil)
+	})
+	Convey("Test EventReader", t, func() {
+		ev := NewPositiveEventReader()
+		So(ev, ShouldNotBeNil)
+		err := ev.Dial("test")
+		So(err, ShouldBeNil)
+		err = ev.ReadEvents("fake ID", nil)
+		So(err, ShouldBeNil)
+		ev.Close()
 	})
 	Convey("Run loadSystemState", t, func() {
 		ch := make(chan string)
@@ -31,12 +84,27 @@ func TestCurrentState(t *testing.T) {
 		So(sysState.scalar.VarID, ShouldEqual, 1)
 		So(sysState.scalar.TimePoint, ShouldEqual, 1)
 	})
-	Convey("Run main", t, func() {
-		main()
-		So(sysState, ShouldNotBeNil)
-		So(sysState.scalar.Value, ShouldEqual, 1.0)
-		So(sysState.scalar.BoxID, ShouldEqual, 1)
-		So(sysState.scalar.VarID, ShouldEqual, 1)
-		So(sysState.scalar.TimePoint, ShouldEqual, 1)
+	Convey("ReadEvents from the database", t, func() {
+		ch := make(chan string)
+		mng := NewMongoEventReader()
+		So(mng, ShouldNotBeNil)
+		err := mng.Dial("mongodb://127.0.0.1/test")
+		So(err, ShouldBeNil)
+		mng.SetEventStore("test", "events")
+		err = mng.ReadEvents("", ch)
+		So(err, ShouldBeNil)
+		for s := range ch {
+			So(s, ShouldNotEqual, "")
+		}
 	})
+	/*
+		Convey("Run main", t, func() {
+			main()
+			So(sysState, ShouldNotBeNil)
+			So(sysState.scalar.Value, ShouldEqual, 1.0)
+			So(sysState.scalar.BoxID, ShouldEqual, 1)
+			So(sysState.scalar.VarID, ShouldEqual, 1)
+			So(sysState.scalar.TimePoint, ShouldEqual, 1)
+		})
+	*/
 }
