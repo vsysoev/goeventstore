@@ -22,7 +22,7 @@ func (e *PositiveEventReader) Dial(url string) error {
 func (e *PositiveEventReader) SetEventStore(dbName string, colName string) {
 
 }
-func (e *PositiveEventReader) ReadEvents(fromId string, outQueue chan string) error {
+func (e *PositiveEventReader) ReadEvents(fromId interface{}, outQueue chan string) error {
 	return nil
 }
 func (e *PositiveEventReader) Close() {
@@ -91,11 +91,34 @@ func TestCurrentState(t *testing.T) {
 		err := mng.Dial("mongodb://127.0.0.1/test")
 		So(err, ShouldBeNil)
 		mng.SetEventStore("test", "events")
-		err = mng.ReadEvents("", ch)
+		err = mng.ReadEvents(nil, ch)
 		So(err, ShouldBeNil)
+		var lastID interface{}
+		prevID := lastID
 		for s := range ch {
 			So(s, ShouldNotEqual, "")
+			var js map[string]interface{}
+			e := json.Unmarshal([]byte(s), &js)
+			So(e, ShouldBeNil)
+			prevID = lastID
+			lastID = js["_id"]
 		}
+		ch = make(chan string)
+		err = mng.ReadEvents(prevID, ch)
+		So(err, ShouldBeNil)
+		itemCount := 0
+		for s := range ch {
+			itemCount++
+			var js map[string]interface{}
+			e := json.Unmarshal([]byte(s), &js)
+			So(e, ShouldBeNil)
+			a := js["array"].([]interface{})
+			So(a[0].(string), ShouldEqual, "123")
+			So(a[1].(string), ShouldEqual, "345")
+			So(a[2].(float64), ShouldEqual, 45)
+			So(a[3].(float64), ShouldEqual, 3445.456)
+		}
+		So(itemCount, ShouldEqual, 1)
 	})
 	/*
 		Convey("Run main", t, func() {

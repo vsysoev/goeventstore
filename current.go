@@ -7,9 +7,8 @@ import
 	"flag"
 	"log"
 
-	"gopkg.in/mgo.v2/bson"
-
 	"labix.org/v2/mgo"
+	"labix.org/v2/mgo/bson"
 )
 
 type (
@@ -39,7 +38,7 @@ type (
 	EventReader interface {
 		Dial(url string) error
 		SetEventStore(dbName string, colName string)
-		ReadEvents(fromId string, outQueue chan string) error
+		ReadEvents(fromId interface{}, outQueue chan string) error
 		Close()
 	}
 	//EventWriter interface DI for event submission to event store
@@ -94,13 +93,15 @@ func (e *MongoEventReader) SetEventStore(dbName string, colName string) {
 }
 
 // ReadEvent Read JSON events started from fromId to slice of strings
-func (e *MongoEventReader) ReadEvents(fromId string, outQueue chan string) error {
+func (e *MongoEventReader) ReadEvents(fromId interface{}, outQueue chan string) error {
 	var (
 		iter   *mgo.Iter
 		result interface{}
 	)
-	if fromId != "" {
-		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(bson.M{"_id": bson.M{"$gt": fromId}}).Iter()
+	if fromId != nil {
+		objId := bson.ObjectIdHex(fromId.(string))
+		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(bson.M{"_id": bson.M{"$gt": objId}}).Iter()
+		//		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).FindId(objId).Iter()
 	} else {
 		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(nil).Iter()
 	}
@@ -112,6 +113,7 @@ func (e *MongoEventReader) ReadEvents(fromId string, outQueue chan string) error
 			}
 			outQueue <- string(s)
 		}
+		iter.Close()
 		close(outQueue)
 	}()
 	return nil
