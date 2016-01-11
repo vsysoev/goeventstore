@@ -4,8 +4,10 @@ import
 //	"labix.org/v2/mgo"
 (
 	"encoding/json"
-	"flag"
-	"log"
+	"fmt"
+	"net/http"
+
+	"golang.org/x/net/websocket"
 
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
@@ -38,7 +40,7 @@ type (
 	EventReader interface {
 		Dial(url string) error
 		SetEventStore(dbName string, colName string)
-		ReadEvents(fromId interface{}, outQueue chan string) error
+		ReadEvents(fromId interface{}) (chan string, error)
 		Close()
 	}
 	//EventWriter interface DI for event submission to event store
@@ -59,6 +61,9 @@ type (
 		session              *mgo.Session
 		dbName               string
 		eventStoreCollection string
+	}
+
+	Client struct {
 	}
 )
 
@@ -93,11 +98,12 @@ func (e *MongoEventReader) SetEventStore(dbName string, colName string) {
 }
 
 // ReadEvent Read JSON events started from fromId to slice of strings
-func (e *MongoEventReader) ReadEvents(fromId interface{}, outQueue chan string) error {
+func (e *MongoEventReader) ReadEvents(fromId interface{}) (chan string, error) {
 	var (
 		iter   *mgo.Iter
 		result interface{}
 	)
+	outQueue := make(chan string)
 	if fromId != nil {
 		objId := bson.ObjectIdHex(fromId.(string))
 		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(bson.M{"_id": bson.M{"$gt": objId}}).Iter()
@@ -116,7 +122,7 @@ func (e *MongoEventReader) ReadEvents(fromId interface{}, outQueue chan string) 
 		iter.Close()
 		close(outQueue)
 	}()
-	return nil
+	return outQueue, nil
 }
 
 // Close closes connection to the server
@@ -159,13 +165,45 @@ func (e *MongoEventWriter) CommitEvent(eventJSON string) error {
 func (e *MongoEventWriter) Close() {
 	e.session.Close()
 }
-func main() {
-	var dbServer string
-	flag.StringVar(&dbServer, "server", "", "Path to database mongo://localhost")
-	realReader := NewMongoEventReader()
-	err := realReader.Dial(dbServer)
+
+// WebSocket handle
+func echoHandler(ws *websocket.Conn) {
+	var err error
+
+	rd := NewMongoEventReader()
+	err = rd.Dial("mongodb://localhost/test")
 	if err != nil {
-		log.Fatal(err)
+		panic("Can't connect mongodb server")
 	}
-	//loadSystemState(eventRead)
+	rd.SetEventStore("test", "events")
+	for {
+		var reply string
+
+		if err = websocket.Message.Receive(ws, &reply); err != nil {
+			fmt.Println("Can't receive")
+			break
+		}
+		var jsonReply map[string]interface{}
+		err = json.Unmarshal([]byte(reply), &jsonReply)
+		var out chan string
+		if jsonReply["_id"] != "" {
+			out, err = rd.ReadEvents(jsonReply["_id"])
+		} else {
+			out, err = rd.ReadEvents(nil)
+		}
+		for s := range out {
+			fmt.Println("SND", s)
+			if err = websocket.Message.Send(ws, []byte(s)); err != nil {
+				fmt.Println("Can't send")
+				break
+			}
+		}
+	}
+}
+func main() {
+	http.Handle("/echo", websocket.Handler(echoHandler))
+	err := http.ListenAndServe(":8080", nil)
+	if err != nil {
+		panic("Error start http server")
+	}
 }

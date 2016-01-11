@@ -22,8 +22,8 @@ func (e *PositiveEventReader) Dial(url string) error {
 func (e *PositiveEventReader) SetEventStore(dbName string, colName string) {
 
 }
-func (e *PositiveEventReader) ReadEvents(fromId interface{}, outQueue chan string) error {
-	return nil
+func (e *PositiveEventReader) ReadEvents(fromId interface{}) (chan string, error) {
+	return nil, nil
 }
 func (e *PositiveEventReader) Close() {
 	return
@@ -71,8 +71,9 @@ func TestCurrentState(t *testing.T) {
 		So(ev, ShouldNotBeNil)
 		err := ev.Dial("test")
 		So(err, ShouldBeNil)
-		err = ev.ReadEvents("fake ID", nil)
+		out, err := ev.ReadEvents("fake ID")
 		So(err, ShouldBeNil)
+		So(out, ShouldBeNil)
 		ev.Close()
 	})
 	Convey("Run loadSystemState", t, func() {
@@ -85,13 +86,12 @@ func TestCurrentState(t *testing.T) {
 		So(sysState.scalar.TimePoint, ShouldEqual, 1)
 	})
 	Convey("ReadEvents from the database", t, func() {
-		ch := make(chan string)
 		mng := NewMongoEventReader()
 		So(mng, ShouldNotBeNil)
 		err := mng.Dial("mongodb://127.0.0.1/test")
 		So(err, ShouldBeNil)
 		mng.SetEventStore("test", "events")
-		err = mng.ReadEvents(nil, ch)
+		ch, err := mng.ReadEvents(nil)
 		So(err, ShouldBeNil)
 		var lastID interface{}
 		prevID := lastID
@@ -103,8 +103,7 @@ func TestCurrentState(t *testing.T) {
 			prevID = lastID
 			lastID = js["_id"]
 		}
-		ch = make(chan string)
-		err = mng.ReadEvents(prevID, ch)
+		ch, err = mng.ReadEvents(prevID)
 		So(err, ShouldBeNil)
 		itemCount := 0
 		for s := range ch {
