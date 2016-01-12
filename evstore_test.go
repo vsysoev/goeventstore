@@ -1,4 +1,4 @@
-package main
+package evstore
 
 import (
 	"encoding/json"
@@ -22,7 +22,11 @@ func (e *PositiveEventReader) Dial(url string) error {
 func (e *PositiveEventReader) SetEventStore(dbName string, colName string) {
 
 }
-func (e *PositiveEventReader) ReadEvents(fromId interface{}) (chan string, error) {
+func (e *PositiveEventReader) ReadEvents(fromId int) (chan string, error) {
+	return nil, nil
+}
+
+func (e *PositiveEventReader) Subscribe(fromId int) (chan string, error) {
 	return nil, nil
 }
 func (e *PositiveEventReader) Close() {
@@ -42,13 +46,6 @@ func TestCurrentState(t *testing.T) {
 	Convey("1 should equal 1", t, func() {
 		So(1, ShouldEqual, 1)
 	})
-	Convey("sState initialized", t, func() {
-		So(sysState, ShouldNotBeNil)
-		So(sysState.scalar.Value, ShouldBeZeroValue)
-		So(sysState.scalar.BoxID, ShouldBeZeroValue)
-		So(sysState.scalar.VarID, ShouldBeZeroValue)
-		So(sysState.scalar.TimePoint, ShouldBeZeroValue)
-	})
 	Convey("Test MongoEventReader", t, func() {
 		mng := NewMongoEventReader()
 		So(mng, ShouldNotBeNil)
@@ -60,7 +57,7 @@ func TestCurrentState(t *testing.T) {
 		So(mng, ShouldNotBeNil)
 		err := mng.Dial("mongodb://127.0.0.1/test")
 		So(err, ShouldBeNil)
-		mng.SetEventStore("test", "events")
+		mng.SetEventStore("test", "events", "eventid")
 		err = mng.CommitEvent("{\"test\":\"value\"}")
 		So(err, ShouldBeNil)
 		err = mng.CommitEvent("{\"array\":[\"123\",\"345\", 45, 3445.456]}")
@@ -71,27 +68,18 @@ func TestCurrentState(t *testing.T) {
 		So(ev, ShouldNotBeNil)
 		err := ev.Dial("test")
 		So(err, ShouldBeNil)
-		out, err := ev.ReadEvents("fake ID")
+		out, err := ev.Subscribe(-10)
 		So(err, ShouldBeNil)
 		So(out, ShouldBeNil)
 		ev.Close()
 	})
-	Convey("Run loadSystemState", t, func() {
-		ch := make(chan string)
-		loadSystemState(ch)
-		So(sysState, ShouldNotBeNil)
-		So(sysState.scalar.Value, ShouldEqual, 1.0)
-		So(sysState.scalar.BoxID, ShouldEqual, 1)
-		So(sysState.scalar.VarID, ShouldEqual, 1)
-		So(sysState.scalar.TimePoint, ShouldEqual, 1)
-	})
-	Convey("ReadEvents from the database", t, func() {
+	SkipConvey("ReadEvents from the database", t, func() {
 		mng := NewMongoEventReader()
 		So(mng, ShouldNotBeNil)
 		err := mng.Dial("mongodb://127.0.0.1/test")
 		So(err, ShouldBeNil)
 		mng.SetEventStore("test", "events")
-		ch, err := mng.ReadEvents(nil)
+		ch, err := mng.Subscribe(-1)
 		So(err, ShouldBeNil)
 		var lastID interface{}
 		prevID := lastID
@@ -103,7 +91,7 @@ func TestCurrentState(t *testing.T) {
 			prevID = lastID
 			lastID = js["_id"]
 		}
-		ch, err = mng.ReadEvents(prevID)
+		ch, err = mng.Subscribe(prevID.(int))
 		So(err, ShouldBeNil)
 		itemCount := 0
 		for s := range ch {

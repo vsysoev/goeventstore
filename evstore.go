@@ -1,52 +1,26 @@
-package main
+package evstore
 
 import
 //	"labix.org/v2/mgo"
 (
 	"encoding/json"
-	"fmt"
-	"net/http"
-
-	"golang.org/x/net/websocket"
 
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 )
 
 type (
-	// Datestamp type definition
-	Datestamp int64
-
-	// ScalarValue stores one scalar value for SystemState
-	ScalarValue struct {
-		VarID     int
-		BoxID     int
-		Value     float32
-		TimePoint Datestamp
-	}
-
-	// VectorValue stores one vector for SystemState
-	VectorValue struct {
-		VecID     int
-		BoxID     int
-		TimePoint Datestamp
-	}
-
-	// SystemState is type to preserve current system state and track changes with the time
-	SystemState struct {
-		scalar ScalarValue
-	}
 	// EventReader interface DI for Event reader
 	EventReader interface {
 		Dial(url string) error
 		SetEventStore(dbName string, colName string)
-		ReadEvents(fromId interface{}) (chan string, error)
+		Subscribe(fromId int) (chan string, error)
 		Close()
 	}
 	//EventWriter interface DI for event submission to event store
 	EventWriter interface {
 		Dial(url string) error
-		SetEventStore(dbName string, colName string)
+		SetEventStore(dbName string, eventColName string, idColName string)
 		CommitEvent(eventJSON string) error
 		Close()
 	}
@@ -61,20 +35,9 @@ type (
 		session              *mgo.Session
 		dbName               string
 		eventStoreCollection string
-	}
-
-	Client struct {
+		idStoreCollection    string
 	}
 )
-
-var sysState SystemState
-
-func loadSystemState(eventSource <-chan string) {
-	sysState.scalar.BoxID = 1
-	sysState.scalar.Value = 1.0
-	sysState.scalar.VarID = 1
-	sysState.scalar.TimePoint = 1
-}
 
 // NewMongoEventReader makes new object
 func NewMongoEventReader() EventReader {
@@ -98,16 +61,14 @@ func (e *MongoEventReader) SetEventStore(dbName string, colName string) {
 }
 
 // ReadEvent Read JSON events started from fromId to slice of strings
-func (e *MongoEventReader) ReadEvents(fromId interface{}) (chan string, error) {
+func (e *MongoEventReader) ReadEvents(fromId int) (chan string, error) {
 	var (
 		iter   *mgo.Iter
 		result interface{}
 	)
 	outQueue := make(chan string)
-	if fromId != nil {
-		objId := bson.ObjectIdHex(fromId.(string))
-		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(bson.M{"_id": bson.M{"$gt": objId}}).Iter()
-		//		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).FindId(objId).Iter()
+	if fromId >= 0 {
+		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(bson.M{"event_id": bson.M{"$gt": fromId}}).Iter()
 	} else {
 		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(nil).Iter()
 	}
@@ -123,6 +84,10 @@ func (e *MongoEventReader) ReadEvents(fromId interface{}) (chan string, error) {
 		close(outQueue)
 	}()
 	return outQueue, nil
+}
+
+func (e *MongoEventReader) Subscribe(fromId int) (chan string, error) {
+	return e.ReadEvents(fromId)
 }
 
 // Close closes connection to the server
@@ -146,19 +111,33 @@ func (e *MongoEventWriter) Dial(url string) error {
 }
 
 // SetEventStore sets database name and event store collection name to store events
-func (e *MongoEventWriter) SetEventStore(dbName string, colName string) {
+func (e *MongoEventWriter) SetEventStore(dbName string, eventColName string, idColName string) {
 	e.dbName = dbName
-	e.eventStoreCollection = colName
+	e.eventStoreCollection = eventColName
+	e.idStoreCollection = idColName
 }
 
 // CommitEvent commits one event to the data store
 func (e *MongoEventWriter) CommitEvent(eventJSON string) error {
-	var object interface{}
+	var object map[string]interface{}
 	err := json.Unmarshal([]byte(eventJSON), &object)
 	if err != nil {
 		return err
 	}
-	return e.session.DB(e.dbName).C(e.eventStoreCollection).Insert(object)
+	change := mgo.Change{
+		Update:    bson.M{"$inc": bson.M{"eventid": 1}},
+		Upsert:    true,
+		ReturnNew: true,
+	}
+	var idDoc map[string]interface{}
+	_, err = e.session.DB(e.dbName).C(e.idStoreCollection).Find(nil).Apply(change, &idDoc)
+	if err != nil {
+		return err
+	}
+	event := make(map[string]interface{})
+	event["eventid"] = idDoc["eventid"]
+	event["event"] = object
+	return e.session.DB(e.dbName).C(e.eventStoreCollection).Insert(event)
 }
 
 // Close closes connection to the MongoDB server
@@ -167,6 +146,7 @@ func (e *MongoEventWriter) Close() {
 }
 
 // WebSocket handle
+/*
 func eventReader(ws *websocket.Conn) {
 	var err error
 
@@ -200,6 +180,8 @@ func eventReader(ws *websocket.Conn) {
 		}
 	}
 }
+*/
+/*
 func main() {
 	http.Handle("/events", websocket.Handler(eventReader))
 	err := http.ListenAndServe(":8080", nil)
@@ -207,3 +189,4 @@ func main() {
 		panic("Error start http server")
 	}
 }
+*/
