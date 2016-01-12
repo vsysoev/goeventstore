@@ -68,7 +68,7 @@ func (e *MongoEventReader) ReadEvents(fromId int) (chan string, error) {
 	)
 	outQueue := make(chan string)
 	if fromId >= 0 {
-		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(bson.M{"event_id": bson.M{"$gt": fromId}}).Iter()
+		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(bson.M{"eventid": bson.M{"$gt": fromId}}).Iter()
 	} else {
 		iter = e.session.DB(e.dbName).C(e.eventStoreCollection).Find(nil).Iter()
 	}
@@ -167,9 +167,9 @@ func eventReader(ws *websocket.Conn) {
 		err = json.Unmarshal([]byte(reply), &jsonReply)
 		var out chan string
 		if jsonReply["_id"] != "" {
-			out, err = rd.ReadEvents(jsonReply["_id"])
+			out, err = rd.Subscribe(jsonReply["eventid"].(int))
 		} else {
-			out, err = rd.ReadEvents(nil)
+			out, err = rd.Subscribe(-1)
 		}
 		for s := range out {
 			fmt.Println("SND", s)

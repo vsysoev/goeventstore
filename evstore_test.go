@@ -73,7 +73,7 @@ func TestCurrentState(t *testing.T) {
 		So(out, ShouldBeNil)
 		ev.Close()
 	})
-	SkipConvey("ReadEvents from the database", t, func() {
+	Convey("ReadEvents from the database", t, func() {
 		mng := NewMongoEventReader()
 		So(mng, ShouldNotBeNil)
 		err := mng.Dial("mongodb://127.0.0.1/test")
@@ -81,7 +81,7 @@ func TestCurrentState(t *testing.T) {
 		mng.SetEventStore("test", "events")
 		ch, err := mng.Subscribe(-1)
 		So(err, ShouldBeNil)
-		var lastID interface{}
+		var lastID int
 		prevID := lastID
 		for s := range ch {
 			So(s, ShouldNotEqual, "")
@@ -89,9 +89,9 @@ func TestCurrentState(t *testing.T) {
 			e := json.Unmarshal([]byte(s), &js)
 			So(e, ShouldBeNil)
 			prevID = lastID
-			lastID = js["_id"]
+			lastID = int(js["eventid"].(float64))
 		}
-		ch, err = mng.Subscribe(prevID.(int))
+		ch, err = mng.Subscribe(prevID)
 		So(err, ShouldBeNil)
 		itemCount := 0
 		for s := range ch {
@@ -99,7 +99,8 @@ func TestCurrentState(t *testing.T) {
 			var js map[string]interface{}
 			e := json.Unmarshal([]byte(s), &js)
 			So(e, ShouldBeNil)
-			a := js["array"].([]interface{})
+			ev := js["event"].(map[string]interface{})
+			a := ev["array"].([]interface{})
 			So(a[0].(string), ShouldEqual, "123")
 			So(a[1].(string), ShouldEqual, "345")
 			So(a[2].(float64), ShouldEqual, 45)
