@@ -167,7 +167,7 @@ func (e *MongoEventWriter) Close() {
 }
 
 // WebSocket handle
-func echoHandler(ws *websocket.Conn) {
+func eventReader(ws *websocket.Conn) {
 	var err error
 
 	rd := NewMongoEventReader()
@@ -201,7 +201,7 @@ func echoHandler(ws *websocket.Conn) {
 	}
 }
 func main() {
-	http.Handle("/echo", websocket.Handler(echoHandler))
+	http.Handle("/events", websocket.Handler(eventReader))
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		panic("Error start http server")
