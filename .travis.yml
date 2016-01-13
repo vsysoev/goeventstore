@@ -9,4 +9,3 @@ language: go
 
 go:
   - 1.5.2
-  - tip
