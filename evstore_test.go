@@ -103,14 +103,15 @@ func TestCurrentState(t *testing.T) {
 		}
 		So(itemCount, ShouldEqual, 1)
 	})
-	/*
-		Convey("Run main", t, func() {
-			main()
-			So(sysState, ShouldNotBeNil)
-			So(sysState.scalar.Value, ShouldEqual, 1.0)
-			So(sysState.scalar.BoxID, ShouldEqual, 1)
-			So(sysState.scalar.VarID, ShouldEqual, 1)
-			So(sysState.scalar.TimePoint, ShouldEqual, 1)
-		})
-	*/
+	Convey("Close subscription", t, func() {
+		mng := NewMongoEventReader()
+		So(mng, ShouldNotBeNil)
+		err := mng.Dial("mongodb://127.0.0.1", "test", "events")
+		So(err, ShouldBeNil)
+		ch, err := mng.Subscribe("")
+		So(err, ShouldBeNil)
+		So(ch, ShouldNotBeNil)
+		mng.Close()
+	})
+
 }

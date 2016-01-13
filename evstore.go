@@ -4,7 +4,6 @@ import
 //	"labix.org/v2/mgo"
 (
 	"encoding/json"
-	"fmt"
 
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
@@ -59,7 +58,7 @@ func (e *MongoEventReader) Dial(url string, dbName string, eventCollection strin
 }
 
 // ReadEvents Read JSON events started from fromId to slice of strings
-func (e *MongoEventReader) ReadEvents(fromID string) (chan string, error) {
+func (e *MongoEventReader) readEvents(fromID string) (chan string, error) {
 	var (
 		iter   *mgo.Iter
 		result interface{}
@@ -67,7 +66,6 @@ func (e *MongoEventReader) ReadEvents(fromID string) (chan string, error) {
 	outQueue := make(chan string)
 	if fromID != "" {
 		objID := bson.ObjectIdHex(fromID)
-		fmt.Println(objID)
 		iter = e.session.DB(e.dbName).C(e.eventCollection).Find(bson.M{"_id": bson.M{"$gt": objID}}).Iter()
 	} else {
 		iter = e.session.DB(e.dbName).C(e.eventCollection).Find(nil).Iter()
@@ -88,7 +86,7 @@ func (e *MongoEventReader) ReadEvents(fromID string) (chan string, error) {
 
 // Subscribe get channels
 func (e *MongoEventReader) Subscribe(fromID string) (chan string, error) {
-	return e.ReadEvents(fromID)
+	return e.readEvents(fromID)
 }
 
 // Close closes connection to the server
