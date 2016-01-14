@@ -5,6 +5,7 @@ import
 (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -88,7 +89,57 @@ func (e *MongoEventReader) readEvents(fromID string) (chan string, error) {
 
 // Subscribe return channel in which events are published. Channel is open
 func (e *MongoEventReader) Subscribe(fromID string) (chan string, error) {
-	return e.readEvents(fromID)
+	cTrigger := e.session.DB(e.dbName).C(e.triggerCollection)
+	var lastTriggerID string
+	var lastEventID string
+	if fromID != "" {
+		lastEventID = fromID
+	}
+	var result map[string]interface{}
+	outChan := make(chan string)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Errorf("Close closed channel. Recover from panic")
+			}
+		}()
+		iterLast := cTrigger.Find(nil).Sort("-$natural").Limit(2).Iter()
+		for iterLast.Next(&result) {
+			lastTriggerID = result["_id"].(bson.ObjectId).Hex()
+		}
+		iterLast.Close()
+		iter := cTrigger.Find(bson.M{"_id": bson.M{"$gt": bson.ObjectIdHex(lastTriggerID)}}).Sort("$natural").Tail(5 * time.Second)
+		for {
+			for iter.Next(&result) {
+				lastTriggerID = result["_id"].(bson.ObjectId).Hex()
+				evChan, err := e.readEvents(lastEventID)
+				if err != nil {
+					return
+				}
+				for s := range evChan {
+					var js map[string]interface{}
+					err := json.Unmarshal([]byte(s), &js)
+					if err != nil {
+						return
+					}
+					lastEventID = js["_id"].(string)
+					outChan <- s
+				}
+			}
+			if iter.Err() != nil {
+				return
+			}
+			if iter.Timeout() {
+				continue
+			}
+			qNext := cTrigger.Find(bson.M{"_id": bson.M{"$gt": lastTriggerID}})
+
+			iter = qNext.Sort("$natural").Tail(5 * time.Second)
+		}
+		iter.Close()
+		return
+	}()
+	return outChan, nil
 }
 
 // Unsubscribe closes channel
@@ -130,7 +181,6 @@ func (e *MongoEventWriter) Dial(url string, dbName string, eventCollection strin
 	e.eventCollection = eventCollection
 	e.triggerCollection = eventCollection + "_capped"
 	collections, err := e.session.DB(dbName).CollectionNames()
-	fmt.Println("Collections: ", collections)
 	if err != nil {
 		return err
 	}

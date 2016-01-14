@@ -2,7 +2,6 @@ package evstore
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	"gopkg.in/mgo.v2"
@@ -64,7 +63,6 @@ func TestMongoCollections(t *testing.T) {
 		So(len(collections), ShouldBeGreaterThan, 0)
 		bFound := false
 		for _, s := range collections {
-			fmt.Println(s)
 			if s == "test_capped" {
 				bFound = true
 			}
@@ -108,6 +106,7 @@ func TestEventStore(t *testing.T) {
 		out, err := ev.Subscribe("")
 		So(err, ShouldBeNil)
 		So(out, ShouldBeNil)
+		ev.Unsubscribe(out)
 		ev.Close()
 	})
 	Convey("ReadEvents from the database", t, func() {
@@ -118,32 +117,15 @@ func TestEventStore(t *testing.T) {
 		ch, err := mng.Subscribe("")
 		So(err, ShouldBeNil)
 		var lastID string
-		prevID := lastID
 		for s := range ch {
 			So(s, ShouldNotEqual, "")
 			var js map[string]interface{}
 			e := json.Unmarshal([]byte(s), &js)
 			So(e, ShouldBeNil)
-			prevID = lastID
 			lastID = js["_id"].(string)
+			So(lastID, ShouldNotEqual, "")
+			mng.Unsubscribe(ch)
 		}
-		ch, err = mng.Subscribe(prevID)
-		So(err, ShouldBeNil)
-		itemCount := 0
-		for s := range ch {
-			itemCount++
-			var js map[string]interface{}
-			e := json.Unmarshal([]byte(s), &js)
-			So(e, ShouldBeNil)
-			ev := js["event"].(map[string]interface{})
-			a := ev["array"].([]interface{})
-			So(a[0].(string), ShouldEqual, "123")
-			So(a[1].(string), ShouldEqual, "345")
-			So(a[2].(float64), ShouldEqual, 45)
-			So(a[3].(float64), ShouldEqual, 3445.456)
-		}
-		mng.Unsubscribe(ch)
-		So(itemCount, ShouldEqual, 1)
 	})
 	Convey("Close connection", t, func() {
 		mng := NewMongoEventReader()
