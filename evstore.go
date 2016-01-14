@@ -100,6 +100,15 @@ func NewMongoEventWriter() EventWriter {
 	return &MongoEventWriter{}
 }
 
+func contains(col []string, target string) bool {
+	for _, s := range col {
+		if s == target {
+			return true
+		}
+	}
+	return false
+}
+
 // Dial connect to MongoDB storage
 func (e *MongoEventWriter) Dial(url string, dbName string, eventCollection string) error {
 	var err error
@@ -109,8 +118,12 @@ func (e *MongoEventWriter) Dial(url string, dbName string, eventCollection strin
 	}
 	e.eventCollection = eventCollection
 	e.triggerCollection = eventCollection + "_capped"
-	fmt.Println(e.session.DB(dbName).C(e.triggerCollection))
-	if e.session.DB(dbName).C(e.triggerCollection) == nil {
+	collections, err := e.session.DB(dbName).CollectionNames()
+	fmt.Println("Collections: ", collections)
+	if err != nil {
+		return err
+	}
+	if !contains(collections, e.triggerCollection) {
 		cInfo := mgo.CollectionInfo{
 			Capped:   true,
 			MaxBytes: 1000000,
@@ -141,48 +154,3 @@ func (e *MongoEventWriter) CommitEvent(eventJSON string) error {
 func (e *MongoEventWriter) Close() {
 	e.session.Close()
 }
-
-// WebSocket handle
-/*
-func eventReader(ws *websocket.Conn) {
-	var err error
-
-	rd := NewMongoEventReader()
-	err = rd.Dial("mongodb://localhost/test", "test", "events")
-	if err != nil {
-		panic("Can't connect mongodb server")
-	}
-	for {
-		var reply string
-
-		if err = websocket.Message.Receive(ws, &reply); err != nil {
-			fmt.Println("Can't receive")
-			break
-		}
-		var jsonReply map[string]interface{}
-		err = json.Unmarshal([]byte(reply), &jsonReply)
-		var out chan string
-		if jsonReply["_id"] != "" {
-			out, err = rd.Subscribe(jsonReply["eventid"].(int))
-		} else {
-			out, err = rd.Subscribe(-1)
-		}
-		for s := range out {
-			fmt.Println("SND", s)
-			if err = websocket.Message.Send(ws, []byte(s)); err != nil {
-				fmt.Println("Can't send")
-				break
-			}
-		}
-	}
-}
-
-
-func main() {
-	http.Handle("/events", websocket.Handler(eventReader))
-	err := http.ListenAndServe(":8080", nil)
-	if err != nil {
-		panic("Error start http server")
-	}
-}
-*/

@@ -2,7 +2,10 @@ package evstore
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
+
+	"gopkg.in/mgo.v2"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -41,9 +44,40 @@ func TestJSONUnmarshalling(t *testing.T) {
 	})
 }
 
-func TestCurrentState(t *testing.T) {
+func TestMongoCollections(t *testing.T) {
+	Convey("Test if CollectionNames() returns not empty string array", t, func() {
+		mgoSession, err := mgo.Dial(mongoURL)
+		So(err, ShouldBeNil)
+		So(mgoSession, ShouldNotBeNil)
+		cInfo := mgo.CollectionInfo{
+			Capped:   true,
+			MaxBytes: 1000000,
+		}
+		mgoSession.DB("test").C("test_capped").Create(&cInfo)
+		collections, err := mgoSession.DB("test").CollectionNames()
+		So(err, ShouldBeNil)
+		So(len(collections), ShouldBeGreaterThan, 0)
+		bFound := false
+		for _, s := range collections {
+			fmt.Println(s)
+			if s == "test_capped" {
+				bFound = true
+			}
+		}
+		So(bFound, ShouldBeTrue)
+		mgoSession.DB("test").C("test_capped").DropCollection()
+	})
+}
+
+func TestEventStore(t *testing.T) {
 	Convey("1 should equal 1", t, func() {
 		So(1, ShouldEqual, 1)
+	})
+	Convey("Test if contains works", t, func() {
+		arr := []string{"value1", "value2", "value3"}
+		So(contains(arr, "value1"), ShouldBeTrue)
+		So(contains(arr, "value3"), ShouldBeTrue)
+		So(contains(arr, "value5"), ShouldBeFalse)
 	})
 	Convey("Test MongoEventReader", t, func() {
 		mng := NewMongoEventReader()
