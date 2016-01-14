@@ -31,6 +31,11 @@ func (e *PositiveEventReader) ReadEvents(fromID string) (chan string, error) {
 func (e *PositiveEventReader) Subscribe(fromID string) (chan string, error) {
 	return nil, nil
 }
+
+func (e *PositiveEventReader) Unsubscribe(eventChannel chan string) {
+
+}
+
 func (e *PositiveEventReader) Close() {
 	return
 }
@@ -137,9 +142,10 @@ func TestEventStore(t *testing.T) {
 			So(a[2].(float64), ShouldEqual, 45)
 			So(a[3].(float64), ShouldEqual, 3445.456)
 		}
+		mng.Unsubscribe(ch)
 		So(itemCount, ShouldEqual, 1)
 	})
-	Convey("Close subscription", t, func() {
+	Convey("Close connection", t, func() {
 		mng := NewMongoEventReader()
 		So(mng, ShouldNotBeNil)
 		err := mng.Dial(mongoURL, "test", "events")
@@ -147,6 +153,7 @@ func TestEventStore(t *testing.T) {
 		ch, err := mng.Subscribe("")
 		So(err, ShouldBeNil)
 		So(ch, ShouldNotBeNil)
+		mng.Unsubscribe(ch)
 		mng.Close()
 	})
 

@@ -15,6 +15,7 @@ type (
 	EventReader interface {
 		Dial(url string, dbName string, eventCollection string) error
 		Subscribe(fromID string) (chan string, error)
+		Unsubscribe(eventChannel chan string)
 		Close()
 	}
 	//EventWriter interface DI for event submission to event store
@@ -85,9 +86,19 @@ func (e *MongoEventReader) readEvents(fromID string) (chan string, error) {
 	return outQueue, nil
 }
 
-// Subscribe get channels
+// Subscribe return channel in which events are published. Channel is open
 func (e *MongoEventReader) Subscribe(fromID string) (chan string, error) {
 	return e.readEvents(fromID)
+}
+
+// Unsubscribe closes channel
+func (e *MongoEventReader) Unsubscribe(eventChannel chan string) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Errorf("Close closed channel. Recover from panic")
+		}
+	}()
+	close(eventChannel)
 }
 
 // Close closes connection to the server
