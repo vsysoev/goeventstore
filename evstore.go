@@ -4,9 +4,10 @@ import
 //	"labix.org/v2/mgo"
 (
 	"encoding/json"
+	"fmt"
 
-	"labix.org/v2/mgo"
-	"labix.org/v2/mgo/bson"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 )
 
 type (
@@ -108,6 +109,7 @@ func (e *MongoEventWriter) Dial(url string, dbName string, eventCollection strin
 	}
 	e.eventCollection = eventCollection
 	e.triggerCollection = eventCollection + "_capped"
+	fmt.Println(e.session.DB(dbName).C(e.triggerCollection))
 	if e.session.DB(dbName).C(e.triggerCollection) == nil {
 		cInfo := mgo.CollectionInfo{
 			Capped:   true,

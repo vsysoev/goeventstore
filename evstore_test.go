@@ -7,6 +7,8 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
+const mongoURL string = "mongodb://127.0.0.1"
+
 type (
 	PositiveEventReader struct{}
 )
@@ -46,13 +48,13 @@ func TestCurrentState(t *testing.T) {
 	Convey("Test MongoEventReader", t, func() {
 		mng := NewMongoEventReader()
 		So(mng, ShouldNotBeNil)
-		err := mng.Dial("mongodb://127.0.0.1", "test", "events")
+		err := mng.Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
 	})
 	Convey("Test CommitEvent of MongoEventWriter", t, func() {
 		mng := NewMongoEventWriter()
 		So(mng, ShouldNotBeNil)
-		err := mng.Dial("mongodb://127.0.0.1", "test", "events")
+		err := mng.Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
 		err = mng.CommitEvent("{\"test\":\"value\"}")
 		So(err, ShouldBeNil)
@@ -72,7 +74,7 @@ func TestCurrentState(t *testing.T) {
 	Convey("ReadEvents from the database", t, func() {
 		mng := NewMongoEventReader()
 		So(mng, ShouldNotBeNil)
-		err := mng.Dial("mongodb://127.0.0.1", "test", "events")
+		err := mng.Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
 		ch, err := mng.Subscribe("")
 		So(err, ShouldBeNil)
@@ -106,7 +108,7 @@ func TestCurrentState(t *testing.T) {
 	Convey("Close subscription", t, func() {
 		mng := NewMongoEventReader()
 		So(mng, ShouldNotBeNil)
-		err := mng.Dial("mongodb://127.0.0.1", "test", "events")
+		err := mng.Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
 		ch, err := mng.Subscribe("")
 		So(err, ShouldBeNil)
