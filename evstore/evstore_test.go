@@ -12,32 +12,8 @@ import (
 const mongoURL string = "mongodb://127.0.0.1"
 
 type (
-	PositiveEventReader struct{}
+	PositiveListenner struct{}
 )
-
-func NewPositiveEventReader() EventReader {
-	return &PositiveEventReader{}
-}
-
-func (e *PositiveEventReader) Dial(url string, dbName string, eventCollection string) error {
-	return nil
-}
-
-func (e *PositiveEventReader) ReadEvents(fromID string) (chan string, error) {
-	return nil, nil
-}
-
-func (e *PositiveEventReader) Subscribe(fromID string) (chan string, error) {
-	return nil, nil
-}
-
-func (e *PositiveEventReader) Unsubscribe(eventChannel chan string) {
-
-}
-
-func (e *PositiveEventReader) Close() {
-	return
-}
 
 func TestJSONUnmarshalling(t *testing.T) {
 	Convey("Simple json unmarshalling", t, func() {
@@ -73,9 +49,7 @@ func TestMongoCollections(t *testing.T) {
 }
 
 func TestEventStore(t *testing.T) {
-	Convey("1 should equal 1", t, func() {
-		So(1, ShouldEqual, 1)
-	})
+
 	Convey("Test if contains works", t, func() {
 		arr := []string{"value1", "value2", "value3"}
 		So(contains(arr, "value1"), ShouldBeTrue)
@@ -83,38 +57,37 @@ func TestEventStore(t *testing.T) {
 		So(contains(arr, "value5"), ShouldBeFalse)
 	})
 	Convey("Test MongoEventReader", t, func() {
-		mng := NewMongoEventReader()
+		mng, err := Dial(mongoURL, "test", "events")
 		So(mng, ShouldNotBeNil)
-		err := mng.Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
 	})
 	Convey("Test CommitEvent of MongoEventWriter", t, func() {
-		mng := NewMongoEventWriter()
+		mng, err := Dial(mongoURL, "test", "events")
 		So(mng, ShouldNotBeNil)
-		err := mng.Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
-		err = mng.CommitEvent("{\"test\":\"value\"}")
+		id, err := mng.Committer().SubmitEvent("", "{\"test\":\"value\"}")
 		So(err, ShouldBeNil)
-		err = mng.CommitEvent("{\"array\":[\"123\",\"345\", 45, 3445.456]}")
+		id, err = mng.Committer().SubmitEvent(id, "{\"array\":[\"123\",\"345\", 45, 3445.456]}")
 		So(err, ShouldBeNil)
 	})
-	Convey("Test EventReader", t, func() {
-		ev := NewPositiveEventReader()
-		So(ev, ShouldNotBeNil)
-		err := ev.Dial("fake", "test", "events")
-		So(err, ShouldBeNil)
-		out, err := ev.Subscribe("")
-		So(err, ShouldBeNil)
-		So(out, ShouldBeNil)
-		ev.Unsubscribe(out)
-		ev.Close()
-	})
+	/*
+		Convey("Test EventReader", t, func() {
+			ev := NewPositiveEventReader()
+			So(ev, ShouldNotBeNil)
+			err := ev.Dial("fake", "test", "events")
+			So(err, ShouldBeNil)
+			out, err := ev.Subscribe("")
+			So(err, ShouldBeNil)
+			So(out, ShouldBeNil)
+			ev.Unsubscribe(out)
+			ev.Close()
+		})
+	*/
 	Convey("ReadEvents from the database", t, func() {
-		mng := NewMongoEventReader()
+		mng, err := Dial(mongoURL, "test", "events")
 		So(mng, ShouldNotBeNil)
-		err := mng.Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
-		ch, err := mng.Subscribe("")
+		ch, err := mng.Listenner().Subscribe("")
 		So(err, ShouldBeNil)
 		var lastID string
 		for s := range ch {
@@ -124,18 +97,18 @@ func TestEventStore(t *testing.T) {
 			So(e, ShouldBeNil)
 			lastID = js["_id"].(string)
 			So(lastID, ShouldNotEqual, "")
-			mng.Unsubscribe(ch)
+			mng.Listenner().Unsubscribe(ch)
 		}
 	})
+
 	Convey("Close connection", t, func() {
-		mng := NewMongoEventReader()
+		mng, err := Dial(mongoURL, "test", "events")
 		So(mng, ShouldNotBeNil)
-		err := mng.Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
-		ch, err := mng.Subscribe("")
+		ch, err := mng.Listenner().Subscribe("")
 		So(err, ShouldBeNil)
 		So(ch, ShouldNotBeNil)
-		mng.Unsubscribe(ch)
+		mng.Listenner().Unsubscribe(ch)
 		mng.Close()
 	})
 

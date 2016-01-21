@@ -1,9 +1,8 @@
 package evstore
 
-import
-//	"labix.org/v2/mgo"
-(
+import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,6 +11,20 @@ import
 )
 
 type (
+	Connection struct {
+		session           *mgo.Session
+		dbName            string
+		eventCollection   string
+		triggerCollection string
+		committer         *CommitterT
+		listenner         *ListennerT
+	}
+	CommitterT struct {
+		p *Connection
+	}
+	ListennerT struct {
+		p *Connection
+	}
 	// EventReader interface DI for Event reader
 	EventReader interface {
 		Dial(url string, dbName string, eventCollection string) error
@@ -24,6 +37,13 @@ type (
 		Dial(url string, dbName string, eventCollection string) error
 		CommitEvent(eventJSON string) error
 		Close()
+	}
+	Committer interface {
+		SubmitEvent(sequenceID string, eventJSON string) (string, error)
+	}
+	Listenner interface {
+		Subscribe(fromID string) (chan string, error)
+		Unsubscribe(eventChannel chan string)
 	}
 	// MongoEventReader implements reading events from MongoDB storage
 	MongoEventReader struct {
@@ -42,26 +62,51 @@ type (
 	}
 )
 
-// NewMongoEventReader makes new object
-func NewMongoEventReader() EventReader {
-	return &MongoEventReader{}
+func Dial(url string, dbName string, eventCollection string) (*Connection, error) {
+	var err error
+	c := Connection{}
+	c.session, err = mgo.Dial(url)
+	if err != nil {
+		return nil, err
+	}
+	c.dbName = dbName
+	c.eventCollection = eventCollection
+	c.triggerCollection = eventCollection + "_capped"
+	c.committer = &CommitterT{}
+	c.listenner = &ListennerT{}
+	c.listenner.p = &c
+	c.committer.p = &c
+	return &c, nil
+}
+func (c *Connection) Close() {
+	c.session.Close()
 }
 
-// Dial connect to server by Mongo URL
-func (e *MongoEventReader) Dial(url string, dbName string, eventCollection string) error {
-	var err error
-	e.session, err = mgo.Dial(url)
+func (c *Connection) Committer() Committer {
+	return c.committer
+}
+
+func (c *Connection) Listenner() Listenner {
+	return c.listenner
+}
+func (c *CommitterT) SubmitEvent(sequenceID string, eventJSON string) (string, error) {
+	var object map[string]interface{}
+	err := json.Unmarshal([]byte(eventJSON), &object)
 	if err != nil {
-		return err
+		return "", err
 	}
-	e.dbName = dbName
-	e.eventCollection = eventCollection
-	e.triggerCollection = eventCollection + "_capped"
-	return nil
+	event := make(map[string]interface{})
+	event["event"] = object
+	err = c.p.session.DB(c.p.dbName).C(c.p.eventCollection).Insert(event)
+	if err != nil {
+		return "", err
+	}
+	err = c.p.session.DB(c.p.dbName).C(c.p.triggerCollection).Insert(bson.M{"trigger": 1})
+	return "", err
 }
 
 // ReadEvents Read JSON events started from fromId to slice of strings
-func (e *MongoEventReader) readEvents(fromID string) (chan string, error) {
+func (e *ListennerT) readEvents(fromID string) (chan string, error) {
 	var (
 		iter   *mgo.Iter
 		result interface{}
@@ -69,9 +114,9 @@ func (e *MongoEventReader) readEvents(fromID string) (chan string, error) {
 	outQueue := make(chan string)
 	if fromID != "" {
 		objID := bson.ObjectIdHex(fromID)
-		iter = e.session.DB(e.dbName).C(e.eventCollection).Find(bson.M{"_id": bson.M{"$gt": objID}}).Iter()
+		iter = e.p.session.DB(e.p.dbName).C(e.p.eventCollection).Find(bson.M{"_id": bson.M{"$gt": objID}}).Iter()
 	} else {
-		iter = e.session.DB(e.dbName).C(e.eventCollection).Find(nil).Iter()
+		iter = e.p.session.DB(e.p.dbName).C(e.p.eventCollection).Find(nil).Iter()
 	}
 	go func() {
 		for iter.Next(&result) {
@@ -87,9 +132,11 @@ func (e *MongoEventReader) readEvents(fromID string) (chan string, error) {
 	return outQueue, nil
 }
 
-// Subscribe return channel in which events are published. Channel is open
-func (e *MongoEventReader) Subscribe(fromID string) (chan string, error) {
-	cTrigger := e.session.DB(e.dbName).C(e.triggerCollection)
+func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
+	if e.p.session == nil {
+		return nil, errors.New(`Mongo isn't connected. Please use Dial().`)
+	}
+	cTrigger := e.p.session.DB(e.p.dbName).C(e.p.triggerCollection)
 	var lastTriggerID string
 	var lastEventID string
 	if fromID != "" {
@@ -143,23 +190,13 @@ func (e *MongoEventReader) Subscribe(fromID string) (chan string, error) {
 }
 
 // Unsubscribe closes channel
-func (e *MongoEventReader) Unsubscribe(eventChannel chan string) {
+func (e *ListennerT) Unsubscribe(eventChannel chan string) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Errorf("Close closed channel. Recover from panic")
 		}
 	}()
 	close(eventChannel)
-}
-
-// Close closes connection to the server
-func (e *MongoEventReader) Close() {
-	e.session.Close()
-}
-
-// NewMongoEventWriter make new object and returns pointer to interface
-func NewMongoEventWriter() EventWriter {
-	return &MongoEventWriter{}
 }
 
 func contains(col []string, target string) bool {
@@ -192,26 +229,4 @@ func (e *MongoEventWriter) Dial(url string, dbName string, eventCollection strin
 		e.session.DB(dbName).C(e.triggerCollection).Create(&cInfo)
 	}
 	return nil
-}
-
-// CommitEvent commits one event to the data store
-func (e *MongoEventWriter) CommitEvent(eventJSON string) error {
-	var object map[string]interface{}
-	err := json.Unmarshal([]byte(eventJSON), &object)
-	if err != nil {
-		return err
-	}
-	event := make(map[string]interface{})
-	event["event"] = object
-	err = e.session.DB(e.dbName).C(e.eventCollection).Insert(event)
-	if err != nil {
-		return err
-	}
-	err = e.session.DB(e.dbName).C(e.triggerCollection).Insert(bson.M{"trigger": 1})
-	return err
-}
-
-// Close closes connection to the MongoDB server
-func (e *MongoEventWriter) Close() {
-	e.session.Close()
 }
