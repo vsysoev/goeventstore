@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -34,11 +35,11 @@ func NewClient(ws *websocket.Conn, server *Server) *Client {
 	}
 
 	maxId++
-	ch := make(chan string, channelBufSize)
+	//ch := make(chan string, channelBufSize)
 	doneCh := make(chan bool)
 	cmdCh := make(chan map[string]interface{}, channelBufSize)
 
-	return &Client{maxId, ws, server, ch, cmdCh, doneCh}
+	return &Client{maxId, ws, server, nil, cmdCh, doneCh}
 }
 
 func (c *Client) Conn() *websocket.Conn {
@@ -72,14 +73,15 @@ func (c *Client) listenWrite() {
 
 		// send message to the client
 		case msg := <-c.ch:
-			log.Println("Send:", msg)
 			websocket.JSON.Send(c.ws, msg)
-
+			break
 		// receive done request
 		case <-c.doneCh:
 			c.server.Del(c)
 			c.doneCh <- true
 			return
+		default:
+			time.Sleep(time.Millisecond * 10)
 		}
 	}
 }
@@ -104,7 +106,21 @@ func (c *Client) listenRead() {
 				c.server.Err(err)
 			} else {
 				log.Println("Message recieved", msg)
-				c.cmdCh <- msg
+				if _, ok := msg["get"]; ok {
+					// requested events
+					var v1 map[string]interface{}
+					v1, ok = msg["get"].(map[string]interface{})
+					if v2, ok := v1["id"]; ok {
+						if c.ch != nil {
+							c.server.eventStore.Listenner().Unsubscribe(c.ch)
+							fmt.Println("Unsubscibed")
+						}
+						c.ch, err = c.server.eventStore.Listenner().Subscribe(v2.(string))
+						if err != nil {
+							log.Println("Error getting data from eventStore")
+						}
+					}
+				}
 			}
 		}
 	}

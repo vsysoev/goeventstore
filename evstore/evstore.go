@@ -164,13 +164,13 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 					return
 				}
 				for s := range evChan {
-					fmt.Println(s)
 					var js map[string]interface{}
 					err := json.Unmarshal([]byte(s), &js)
 					if err != nil {
 						return
 					}
 					lastEventID = js["_id"].(string)
+
 					select {
 					case <-e.done:
 						break Loop
