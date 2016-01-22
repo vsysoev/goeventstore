@@ -12,31 +12,33 @@ const channelBufSize = 100
 
 var maxId int = 0
 
-// Chat client.
+// Clients struct holds client connection information
 type Client struct {
 	id     int
 	ws     *websocket.Conn
 	server *Server
 	ch     chan string
+	cmdCh  chan map[string]interface{}
 	doneCh chan bool
 }
 
-// Create new chat client.
+// NewClient creates new websocket client.
 func NewClient(ws *websocket.Conn, server *Server) *Client {
 
 	if ws == nil {
-		panic("ws cannot be nil")
+		panic("Error ws can't be nil")
 	}
 
 	if server == nil {
-		panic("server cannot be nil")
+		panic("It isn't possible to be server as nil")
 	}
 
 	maxId++
 	ch := make(chan string, channelBufSize)
 	doneCh := make(chan bool)
+	cmdCh := make(chan map[string]interface{}, channelBufSize)
 
-	return &Client{maxId, ws, server, ch, doneCh}
+	return &Client{maxId, ws, server, ch, cmdCh, doneCh}
 }
 
 func (c *Client) Conn() *websocket.Conn {
@@ -63,7 +65,6 @@ func (c *Client) Listen() {
 	c.listenRead()
 }
 
-// Listen write request via chanel
 func (c *Client) listenWrite() {
 	log.Println("Listening write to client")
 	for {
@@ -77,34 +78,33 @@ func (c *Client) listenWrite() {
 		// receive done request
 		case <-c.doneCh:
 			c.server.Del(c)
-			c.doneCh <- true // for listenRead method
+			c.doneCh <- true
 			return
 		}
 	}
 }
 
-// Listen read request via chanel
 func (c *Client) listenRead() {
 	log.Println("Listening read from client")
 	for {
 		select {
 
-		// receive done request
 		case <-c.doneCh:
 			c.server.Del(c)
-			c.doneCh <- true // for listenWrite method
+			c.doneCh <- true
 			return
 
 		// read data from websocket connection
 		default:
-			var msg string
+			var msg map[string]interface{}
 			err := websocket.JSON.Receive(c.ws, &msg)
 			if err == io.EOF {
 				c.doneCh <- true
 			} else if err != nil {
 				c.server.Err(err)
 			} else {
-				c.server.SendAll(&msg)
+				log.Println("Message recieved", msg)
+				c.cmdCh <- msg
 			}
 		}
 	}
