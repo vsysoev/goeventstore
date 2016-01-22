@@ -11,17 +11,17 @@ import (
 
 func main() {
 	props := property.Init()
-	evStore, err := evstore.Dial(props["mongodb.url"].(string), props["mongodb.db"].(string), props["mongodb.events"].(string))
+	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.events"])
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}
-	wsServer := wsock.NewServer(props["websocket.uri"].(string), evStore)
+	wsServer := wsock.NewServer(props["websocket.uri"], evStore)
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
 	}
 	go wsServer.Listen()
 
 	http.Handle("/", http.FileServer(http.Dir("webroot")))
-	err = http.ListenAndServe(props["websocket.url"].(string), nil)
+	err = http.ListenAndServe(props["websocket.url"], nil)
 	evStore.Close()
 }
