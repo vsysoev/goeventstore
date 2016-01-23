@@ -10,6 +10,10 @@ import (
 	"gopkg.in/mgo.v2/bson"
 )
 
+const (
+	chanBufSize int = 1024
+)
+
 type (
 	// Connection exports mondodb connection attributes
 	Connection struct {
@@ -142,7 +146,7 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 		lastEventID = fromID
 	}
 	var result map[string]interface{}
-	outChan := make(chan string)
+	outChan := make(chan string, chanBufSize)
 	e.done = make(chan interface{})
 	go func() {
 		defer func() {
