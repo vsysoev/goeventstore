@@ -1,23 +1,46 @@
 package current
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type (
 	// StateReader defines interface which is used for Subscribtion to state changes
 	StateReader interface {
-		SubscribeStateChanges(id string) (chan string, error)
-		UnsubscribeStateChanges(ch chan string) error
+		Get(id string) (map[string]interface{}, error)
 	}
 
-	// StateWriter defines interface which updates state
-	StateWriter interface {
-		UpdateState(id string, value interface{}) error
+	// StateUpdater defines interface which updates state
+	StateUpdater interface {
+		Update(key string, id string, value interface{}) error
+	}
+	// ValueT type describes one value in store
+	ValueT struct {
+		id    string
+		value interface{}
 	}
 	// State holds current state of the values of the system
 	State struct {
-		Store map[string]interface{}
+		// Store holds key-value
+		Store map[string]*ValueT
 	}
 )
+
+// Set is the setter for the ValueT type
+func (v *ValueT) Set(id string, value interface{}) error {
+	if id == "" {
+		return errors.New("id should not be empty string")
+	}
+	v.id = id
+	v.value = value
+	return nil
+}
+
+// Get is the getter for the ValueT type
+func (v *ValueT) Get() (string, interface{}) {
+	return v.id, v.value
+}
 
 // NewStateReader contructor of the state reader
 func NewStateReader() StateReader {
@@ -25,19 +48,41 @@ func NewStateReader() StateReader {
 	return &s
 }
 
-func (s *State) SubscribeStateChanges(id string) (chan string, error) {
-
-	return nil, errors.New("Not implemented")
+// NewState returns pointer to read and update interface
+func NewState() (StateReader, StateUpdater) {
+	s := State{}
+	return &s, &s
 }
 
-func (s *State) UnsubscribeStateChanges(ch chan string) error {
-
-	return errors.New("Not implemented")
+// Get returns map[string]inteface{} of values which has been changed since id
+func (s *State) Get(id string) (map[string]interface{}, error) {
+	ret := make(map[string]interface{})
+	fmt.Println(s.Store)
+	for k, v := range s.Store {
+		_id, _v := v.Get()
+		if _id > id {
+			ret[k] = _v
+		}
+	}
+	return ret, nil
 }
 
-func NewStateWriter() StateWriter {
+// NewStateUpdater create object with StateUpdater interface
+func NewStateUpdater() StateUpdater {
 	return &State{}
 }
-func (s *State) UpdateState(id string, value interface{}) error {
-	return errors.New("Not implemented")
+
+// Update update value with id with new value
+func (s *State) Update(key string, id string, value interface{}) error {
+	if key == "" {
+		return errors.New("key should not be empty string")
+	}
+	if s.Store == nil {
+		s.Store = make(map[string]*ValueT)
+	}
+	if s.Store[key] == nil {
+		s.Store[key] = &ValueT{}
+	}
+	fmt.Println(s.Store)
+	return s.Store[key].Set(id, value)
 }
