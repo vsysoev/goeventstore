@@ -174,7 +174,6 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 						return
 					}
 					lastEventID = js["_id"].(string)
-
 					select {
 					case <-e.done:
 						break Loop
@@ -199,7 +198,6 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 			qNext := cTrigger.Find(bson.M{"_id": bson.M{"$gt": lastTriggerID}})
 
 			iter = qNext.Sort("$natural").Tail(100 * time.Millisecond)
-
 		}
 		iter.Close()
 		return

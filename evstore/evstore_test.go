@@ -90,15 +90,22 @@ func TestEventStore(t *testing.T) {
 		ch, err := mng.Listenner().Subscribe("")
 		So(err, ShouldBeNil)
 		var lastID string
-		for s := range ch {
-			So(s, ShouldNotEqual, "")
-			var js map[string]interface{}
-			e := json.Unmarshal([]byte(s), &js)
-			So(e, ShouldBeNil)
-			lastID = js["_id"].(string)
-			So(lastID, ShouldNotEqual, "")
-			mng.Listenner().Unsubscribe(ch)
+	Loop:
+		for {
+			select {
+			case s := <-ch:
+				So(s, ShouldNotEqual, "")
+				var js map[string]interface{}
+				e := json.Unmarshal([]byte(s), &js)
+				So(e, ShouldBeNil)
+				lastID = js["_id"].(string)
+				So(lastID, ShouldNotEqual, "")
+				break
+			default:
+				break Loop
+			}
 		}
+		mng.Listenner().Unsubscribe(ch)
 	})
 
 	Convey("Close connection", t, func() {
