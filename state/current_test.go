@@ -75,4 +75,7 @@ func TestStateReadUpdate(t *testing.T) {
 	if valueMap == nil || err != nil {
 		t.Error("Error getting state.", err)
 	}
+	if valueMap["k1"] != 23 {
+		t.Error("Error getting value.", valueMap["k1"])
+	}
 }

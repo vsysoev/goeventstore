@@ -1,9 +1,6 @@
 package current
 
-import (
-	"errors"
-	"fmt"
-)
+import "errors"
 
 type (
 	// StateReader defines interface which is used for Subscribtion to state changes
@@ -57,7 +54,6 @@ func NewState() (StateReader, StateUpdater) {
 // Get returns map[string]inteface{} of values which has been changed since id
 func (s *State) Get(id string) (map[string]interface{}, error) {
 	ret := make(map[string]interface{})
-	fmt.Println(s.Store)
 	for k, v := range s.Store {
 		_id, _v := v.Get()
 		if _id > id {
@@ -83,6 +79,5 @@ func (s *State) Update(key string, id string, value interface{}) error {
 	if s.Store[key] == nil {
 		s.Store[key] = &ValueT{}
 	}
-	fmt.Println(s.Store)
 	return s.Store[key].Set(id, value)
 }
