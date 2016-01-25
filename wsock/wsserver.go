@@ -4,24 +4,27 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/vsysoev/goeventstore/evstore"
-
 	"golang.org/x/net/websocket"
 )
 
 // Server holds server properties
-type Server struct {
-	pattern    string
-	clients    map[int]*Client
-	addCh      chan *Client
-	delCh      chan *Client
-	doneCh     chan bool
-	errCh      chan error
-	eventStore *evstore.Connection
-}
+type (
+	Server struct {
+		pattern string
+		clients map[int]*Client
+		addCh   chan *Client
+		delCh   chan *Client
+		doneCh  chan bool
+		errCh   chan error
+	}
+	// Handler interface defines the function which will called to process request
+	Handler interface {
+		ClientHandler()
+	}
+)
 
 // NewServer is the server factory
-func NewServer(pattern string, evStore *evstore.Connection) *Server {
+func NewServer(pattern string) *Server {
 	clients := make(map[int]*Client)
 	addCh := make(chan *Client)
 	delCh := make(chan *Client)
@@ -33,13 +36,14 @@ func NewServer(pattern string, evStore *evstore.Connection) *Server {
 		addCh,
 		delCh,
 		doneCh,
-		errCh,
-		evStore}
+		errCh}
 }
 
 // Add adds new client to server
 func (s *Server) Add(c *Client) {
+	log.Println("Send client to ADD channel", s.addCh, c)
 	s.addCh <- c
+	log.Println("Sent client to ADD channel", s.addCh, c)
 }
 
 // Del remove client when it disconnected
@@ -57,10 +61,10 @@ func (s *Server) Err(err error) {
 	s.errCh <- err
 }
 
-func (s *Server) sendAll(msg string) {
-	for _, c := range s.clients {
-		c.Write(msg)
-	}
+// GetChannels return server channel to catch client connection and client
+// information from outside
+func (s *Server) GetChannels() (chan *Client, chan *Client, chan bool, chan error) {
+	return s.addCh, s.delCh, s.doneCh, s.errCh
 }
 
 // Listen  implements main server function
@@ -88,16 +92,17 @@ func (s *Server) Listen() {
 		select {
 
 		// Add new a client
-		case c := <-s.addCh:
-			log.Println("Added new client")
-			s.clients[c.id] = c
-			log.Println("Now", len(s.clients), "clients connected.")
+		/*
+			case c := <-s.addCh:
+				log.Println("Added new client")
+				s.clients[c.id] = c
+				log.Println("Now", len(s.clients), "clients connected.")
 
-		// del a client
-		case c := <-s.delCh:
-			log.Println("Delete client")
-			delete(s.clients, c.id)
-
+			// del a client
+			case c := <-s.delCh:
+				log.Println("Delete client")
+				delete(s.clients, c.id)
+		*/
 		case err := <-s.errCh:
 			log.Println("Error:", err.Error())
 

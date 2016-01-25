@@ -2,6 +2,7 @@ package property
 
 import "encoding/json"
 
+// PropSet holds maps of properties
 type PropSet map[string]string
 
 // Init inits default values
@@ -13,9 +14,12 @@ func Init() PropSet {
 	props["mongodb.events"] = "events"
 	props["websocket.uri"] = "/ws"
 	props["websocket.url"] = ":8899"
+	props["static.url"] = "/"
 	return props
 }
 
+// LoadFromJSON updates default PropSet from Init function with
+// values from JSON. If value doesn't exists it creates.
 func (p PropSet) LoadFromJSON(js []byte) error {
 	var params map[string]interface{}
 	err := json.Unmarshal(js, &params)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"gopkg.in/mgo.v2"
@@ -32,19 +33,6 @@ type (
 	ListennerT struct {
 		p    *Connection
 		done chan interface{}
-	}
-	// EventReader interface DI for Event reader
-	EventReader interface {
-		Dial(url string, dbName string, eventCollection string) error
-		Subscribe(fromID string) (chan string, error)
-		Unsubscribe(eventChannel chan string)
-		Close()
-	}
-	//EventWriter interface DI for event submission to event store
-	EventWriter interface {
-		Dial(url string, dbName string, eventCollection string) error
-		CommitEvent(eventJSON string) error
-		Close()
 	}
 	// Committer interface defines method to commit new event to eventstore
 	Committer interface {
@@ -137,7 +125,7 @@ func (e *ListennerT) readEvents(fromID string) (chan string, error) {
 // Subscribe returns channel from event store
 func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 	if e.p.session == nil {
-		return nil, errors.New(`Mongo isn't connected. Please use Dial().`)
+		return nil, errors.New("Mongo isn't connected. Please use Dial().")
 	}
 	cTrigger := e.p.session.DB(e.p.dbName).C(e.p.triggerCollection)
 	var lastTriggerID string
@@ -202,6 +190,7 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 		iter.Close()
 		return
 	}()
+	log.Println("Returned from Subscribe")
 	return outChan, nil
 }
 

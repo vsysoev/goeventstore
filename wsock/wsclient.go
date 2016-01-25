@@ -11,17 +11,26 @@ import (
 
 const channelBufSize = 100
 
-var maxId int = 0
+var maxID int
 
-// Clients struct holds client connection information
-type Client struct {
-	id     int
-	ws     *websocket.Conn
-	server *Server
-	ch     chan string
-	cmdCh  chan map[string]interface{}
-	doneCh chan bool
-}
+type (
+	// ClientT struct holds client connection information
+	Client struct {
+		id     int
+		ws     *websocket.Conn
+		server *Server
+		fromWS chan *MessageT
+		toWS   chan *MessageT
+		doneCh chan bool
+	}
+	// MessageT defines message type
+	MessageT map[string]interface{}
+	// Producer defines interface for client production. Servers should
+	// implement this functions
+	Producer interface {
+		NewClient(ws *websocket.Conn, server *Server) *Client
+	}
+)
 
 // NewClient creates new websocket client.
 func NewClient(ws *websocket.Conn, server *Server) *Client {
@@ -34,21 +43,28 @@ func NewClient(ws *websocket.Conn, server *Server) *Client {
 		panic("It isn't possible to be server as nil")
 	}
 
-	maxId++
-	//ch := make(chan string, channelBufSize)
+	maxID++
+	fromWS := make(chan *MessageT, channelBufSize)
+	toWS := make(chan *MessageT, channelBufSize)
 	doneCh := make(chan bool)
-	cmdCh := make(chan map[string]interface{}, channelBufSize)
 
-	return &Client{maxId, ws, server, nil, cmdCh, doneCh}
+	return &Client{maxID, ws, server, fromWS, toWS, doneCh}
 }
 
+// GetChannels returns channels to communicate with socket
+func (c *Client) GetChannels() (chan *MessageT, chan *MessageT, chan bool) {
+	log.Println("In GetChannels")
+	return c.fromWS, c.toWS, c.doneCh
+}
+
+// Conn return connection object
 func (c *Client) Conn() *websocket.Conn {
 	return c.ws
 }
 
-func (c *Client) Write(msg string) {
+func (c *Client) Write(msg *MessageT) {
 	select {
-	case c.ch <- msg:
+	case c.fromWS <- msg:
 	default:
 		c.server.Del(c)
 		err := fmt.Errorf("client %d is disconnected.", c.id)
@@ -72,7 +88,7 @@ func (c *Client) listenWrite() {
 		select {
 
 		// send message to the client
-		case msg := <-c.ch:
+		case msg := <-c.toWS:
 			websocket.JSON.Send(c.ws, msg)
 			break
 		// receive done request
@@ -98,7 +114,7 @@ func (c *Client) listenRead() {
 
 		// read data from websocket connection
 		default:
-			var msg map[string]interface{}
+			var msg MessageT
 			err := websocket.JSON.Receive(c.ws, &msg)
 			if err == io.EOF {
 				c.doneCh <- true
@@ -106,21 +122,7 @@ func (c *Client) listenRead() {
 				c.server.Err(err)
 			} else {
 				log.Println("Message recieved", msg)
-				if _, ok := msg["get"]; ok {
-					// requested events
-					var v1 map[string]interface{}
-					v1, ok = msg["get"].(map[string]interface{})
-					if v2, ok := v1["id"]; ok {
-						if c.ch != nil {
-							c.server.eventStore.Listenner().Unsubscribe(c.ch)
-							fmt.Println("Unsubscibed")
-						}
-						c.ch, err = c.server.eventStore.Listenner().Subscribe(v2.(string))
-						if err != nil {
-							log.Println("Error getting data from eventStore")
-						}
-					}
-				}
+				c.fromWS <- &msg
 			}
 		}
 	}
