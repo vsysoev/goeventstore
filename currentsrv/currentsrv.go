@@ -17,22 +17,30 @@ import (
 )
 
 func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
+	var (
+		evCh chan string
+		err  error
+	)
 	fmt.Println("clientProcessor Client connected. ", c)
 	fromWS, toWS, doneCh := c.GetChannels()
 	fmt.Print("Before evStore.Subscribe")
-	evCh, err := evStore.Listenner().Subscribe("")
-	if err != nil {
-		log.Println("Can't subscribe to evStore", err)
-		return
-	}
 	log.Println("Enter main loop serving client")
 Loop:
 	for {
 		select {
 		case msg := <-fromWS:
 			log.Println("Message recieved in currentsrv", msg)
+			if evCh != nil {
+				evStore.Listenner().Unsubscribe(evCh)
+			}
+			evCh, err = evStore.Listenner().Subscribe("")
+			if err != nil {
+				log.Println("Can't subscribe to evStore", err)
+				return
+			}
 			break
 		case msg := <-evCh:
+			log.Println("Msg received", msg)
 			js := wsock.MessageT{}
 			err := json.Unmarshal([]byte(msg), &js)
 			if err != nil {
@@ -44,6 +52,8 @@ Loop:
 			log.Println("Client disconnected. Exit goroutine")
 			break Loop
 		default:
+			fmt.Print(".")
+			time.Sleep(time.Millisecond * 10)
 			break
 		}
 	}
