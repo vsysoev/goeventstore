@@ -75,6 +75,7 @@ func (s *Server) Listen() {
 	// websocket handler
 	onConnected := func(ws *websocket.Conn) {
 		defer func() {
+			log.Println("Defered socket close executed")
 			err := ws.Close()
 			if err != nil {
 				s.errCh <- err

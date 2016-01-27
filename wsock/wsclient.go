@@ -73,7 +73,9 @@ func (c *Client) Write(msg *MessageT) {
 }
 
 func (c *Client) Done() {
+	log.Println("Client.Done send doneCh")
 	c.doneCh <- true
+	log.Println("Client.Done Close client socket", c.ws)
 }
 
 // Listen Write and Read request via chanel
@@ -94,6 +96,7 @@ func (c *Client) listenWrite() {
 			break
 		// receive done request
 		case <-c.doneCh:
+			log.Println("listenWrite doneCh signaled")
 			c.server.Del(c)
 			c.doneCh <- true
 			return
@@ -109,6 +112,7 @@ func (c *Client) listenRead() {
 		select {
 
 		case <-c.doneCh:
+			log.Println("listenRead doneCh signaled")
 			c.server.Del(c)
 			c.doneCh <- true
 			return
@@ -118,8 +122,11 @@ func (c *Client) listenRead() {
 			var msg MessageT
 			err := websocket.JSON.Receive(c.ws, &msg)
 			if err == io.EOF {
+				log.Println("Socket closed. Send doneCh")
+				c.server.Del(c)
 				c.doneCh <- true
 			} else if err != nil {
+				log.Println("while parsing Error returned.")
 				c.server.Err(err)
 			} else {
 				log.Println("Message recieved", msg)

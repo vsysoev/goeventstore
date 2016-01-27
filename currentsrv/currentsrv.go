@@ -50,9 +50,10 @@ Loop:
 			break
 		case <-doneCh:
 			log.Println("Client disconnected. Exit goroutine")
+			evStore.Listenner().Unsubscribe(evCh)
+			doneCh <- true
 			break Loop
 		default:
-			fmt.Print(".")
 			time.Sleep(time.Millisecond * 10)
 			break
 		}
@@ -71,16 +72,17 @@ Loop:
 			break
 		case cli := <-delCh:
 			log.Println("delCh go client", cli)
-			cli.Done()
 			break
 		case <-doneCh:
 			log.Println("doneCh got message")
 			break Loop
 		default:
-			time.Sleep(time.Millisecond * 500)
+			fmt.Print("*")
+			time.Sleep(time.Millisecond * 10)
 			break
 		}
 	}
+	log.Println("processClientConnection exited")
 }
 func main() {
 	f, err := os.Create("currentsrv.prof")

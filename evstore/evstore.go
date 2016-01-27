@@ -3,7 +3,6 @@ package evstore
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"time"
 
@@ -32,7 +31,7 @@ type (
 	// ListennerT export Listenner interface
 	ListennerT struct {
 		p    *Connection
-		done chan interface{}
+		done chan bool
 	}
 	// Committer interface defines method to commit new event to eventstore
 	Committer interface {
@@ -96,30 +95,17 @@ func (c *CommitterT) SubmitEvent(sequenceID string, eventJSON string) (string, e
 }
 
 // ReadEvents Read JSON events started from fromId to slice of strings
-func (e *ListennerT) readEvents(fromID string) (chan string, error) {
+func (e *ListennerT) readEvents(fromID string) (*mgo.Iter, error) {
 	var (
-		iter   *mgo.Iter
-		result interface{}
+		iter *mgo.Iter
 	)
-	outQueue := make(chan string)
 	if fromID != "" {
 		objID := bson.ObjectIdHex(fromID)
 		iter = e.p.session.DB(e.p.dbName).C(e.p.eventCollection).Find(bson.M{"_id": bson.M{"$gt": objID}}).Iter()
 	} else {
 		iter = e.p.session.DB(e.p.dbName).C(e.p.eventCollection).Find(nil).Iter()
 	}
-	go func() {
-		for iter.Next(&result) {
-			s, err := json.Marshal(result)
-			if err != nil {
-				return
-			}
-			outQueue <- string(s)
-		}
-		iter.Close()
-		close(outQueue)
-	}()
-	return outQueue, nil
+	return iter, nil
 }
 
 // Subscribe returns channel from event store
@@ -135,41 +121,51 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 	}
 	var result map[string]interface{}
 	outChan := make(chan string, chanBufSize)
-	e.done = make(chan interface{})
+	e.done = make(chan bool)
 	go func() {
+		var (
+			iter     *mgo.Iter
+			oneEvent map[string]interface{}
+		)
 		defer func() {
+			log.Println("Fire close(outChan)")
+			iter.Close()
 			close(outChan)
 		}()
+		log.Println("Find last two triggered ids")
 		iterLast := cTrigger.Find(nil).Sort("-$natural").Limit(2).Iter()
+		log.Println("Find.Sort.Limit.Iter returned")
 		for iterLast.Next(&result) {
 			lastTriggerID = result["_id"].(bson.ObjectId).Hex()
 		}
+		log.Println("Before iterLast.Close")
 		iterLast.Close()
-		fmt.Println("LasttriggerID", lastTriggerID)
-		iter := cTrigger.Find(bson.M{"_id": bson.M{"$gt": bson.ObjectIdHex(lastTriggerID)}}).Sort("$natural").Tail(100 * time.Millisecond)
+		log.Println("LasttriggerID", lastTriggerID)
+		iter = cTrigger.Find(bson.M{"_id": bson.M{"$gt": bson.ObjectIdHex(lastTriggerID)}}).Sort("$natural").Tail(100 * time.Millisecond)
 	Loop:
 		for {
 			for iter.Next(&result) {
 				lastTriggerID = result["_id"].(bson.ObjectId).Hex()
-				evChan, err := e.readEvents(lastEventID)
+				evIter, err := e.readEvents(lastEventID)
 				if err != nil {
 					return
 				}
-				for s := range evChan {
-					var js map[string]interface{}
-					err := json.Unmarshal([]byte(s), &js)
+				for evIter.Next(&oneEvent) {
+					log.Println(oneEvent)
+					lastEventID = string(oneEvent["_id"].(bson.ObjectId))
+					s, err := json.Marshal(oneEvent)
 					if err != nil {
 						return
 					}
-					lastEventID = js["_id"].(string)
 					select {
 					case <-e.done:
 						break Loop
 					default:
 						break
 					}
-					outChan <- s
+					outChan <- string(s)
 				}
+				evIter.Close()
 			}
 			if iter.Err() != nil {
 				return
@@ -187,7 +183,6 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 
 			iter = qNext.Sort("$natural").Tail(100 * time.Millisecond)
 		}
-		iter.Close()
 		return
 	}()
 	log.Println("Returned from Subscribe")
@@ -202,6 +197,7 @@ func (e *ListennerT) Unsubscribe(eventChannel chan string) {
 	default:
 		break
 	}
+	log.Println("Send e.done")
 	e.done <- true
 }
 
