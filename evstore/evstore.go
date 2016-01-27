@@ -141,7 +141,7 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 		log.Println("Before iterLast.Close")
 		iterLast.Close()
 		log.Println("LasttriggerID", lastTriggerID)
-		iter = cTrigger.Find(bson.M{"_id": bson.M{"$gt": bson.ObjectIdHex(lastTriggerID)}}).Sort("$natural").Tail(100 * time.Millisecond)
+		iter = cTrigger.Find(bson.M{"_id": bson.M{"$gt": bson.ObjectIdHex(lastTriggerID)}}).Sort("$natural").Tail(10 * time.Millisecond)
 	Loop:
 		for {
 			for iter.Next(&result) {
@@ -181,7 +181,7 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 			}
 			qNext := cTrigger.Find(bson.M{"_id": bson.M{"$gt": lastTriggerID}})
 
-			iter = qNext.Sort("$natural").Tail(100 * time.Millisecond)
+			iter = qNext.Sort("$natural").Tail(10 * time.Millisecond)
 		}
 		return
 	}()
