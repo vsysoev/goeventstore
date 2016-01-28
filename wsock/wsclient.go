@@ -9,7 +9,10 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-const channelBufSize = 100
+const (
+	channelBufSize = 100
+	timeout        = time.Millisecond * 100
+)
 
 var maxID int
 
@@ -88,6 +91,11 @@ func (c *Client) listenWrite() {
 	log.Println("Listening write to client")
 	for {
 		select {
+		case <-c.doneCh:
+			log.Println("listenWrite doneCh signaled")
+			//			c.server.Del(c)
+			c.doneCh <- true
+			return
 
 		// send message to the client
 		case msg := <-c.toWS:
@@ -95,13 +103,7 @@ func (c *Client) listenWrite() {
 			log.Println("Msg sent to websocket")
 			break
 		// receive done request
-		case <-c.doneCh:
-			log.Println("listenWrite doneCh signaled")
-			c.server.Del(c)
-			c.doneCh <- true
-			return
-		default:
-			time.Sleep(time.Millisecond * 10)
+		case <-time.After(timeout):
 		}
 	}
 }
@@ -125,6 +127,8 @@ func (c *Client) listenRead() {
 				log.Println("Socket closed. Send doneCh")
 				c.server.Del(c)
 				c.doneCh <- true
+				log.Println("Exit listenRead")
+				return
 			} else if err != nil {
 				log.Println("while parsing Error returned.")
 				c.server.Err(err)

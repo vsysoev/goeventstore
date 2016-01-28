@@ -129,7 +129,9 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 		)
 		defer func() {
 			log.Println("Fire close(outChan)")
-			iter.Close()
+			if iter != nil {
+				iter.Close()
+			}
 			close(outChan)
 		}()
 		log.Println("Find last two triggered ids")
@@ -159,6 +161,7 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 					}
 					select {
 					case <-e.done:
+						log.Println("got e.done")
 						break Loop
 					default:
 						break
@@ -172,6 +175,7 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 			}
 			select {
 			case <-e.done:
+				log.Println("got e.done")
 				break Loop
 			default:
 				break
@@ -191,6 +195,10 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 
 // Unsubscribe closes channel
 func (e *ListennerT) Unsubscribe(eventChannel chan string) {
+	log.Println("Enter unsubscribe")
+	if eventChannel == nil {
+		return
+	}
 	select {
 	case <-eventChannel:
 		break
@@ -199,6 +207,7 @@ func (e *ListennerT) Unsubscribe(eventChannel chan string) {
 	}
 	log.Println("Send e.done")
 	e.done <- true
+	log.Println("Exit unsubscribe")
 }
 
 func contains(col []string, target string) bool {

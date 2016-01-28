@@ -70,19 +70,7 @@ func TestEventStore(t *testing.T) {
 		id, err = mng.Committer().SubmitEvent(id, "{\"array\":[\"123\",\"345\", 45, 3445.456]}")
 		So(err, ShouldBeNil)
 	})
-	/*
-		Convey("Test EventReader", t, func() {
-			ev := NewPositiveEventReader()
-			So(ev, ShouldNotBeNil)
-			err := ev.Dial("fake", "test", "events")
-			So(err, ShouldBeNil)
-			out, err := ev.Subscribe("")
-			So(err, ShouldBeNil)
-			So(out, ShouldBeNil)
-			ev.Unsubscribe(out)
-			ev.Close()
-		})
-	*/
+
 	Convey("ReadEvents from the database", t, func() {
 		mng, err := Dial(mongoURL, "test", "events")
 		So(mng, ShouldNotBeNil)
@@ -116,6 +104,14 @@ func TestEventStore(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(ch, ShouldNotBeNil)
 		mng.Listenner().Unsubscribe(ch)
+		mng.Close()
+	})
+
+	Convey("Unsubscribe not subscribed", t, func() {
+		mng, err := Dial(mongoURL, "test", "events")
+		So(mng, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		mng.Listenner().Unsubscribe(nil)
 		mng.Close()
 	})
 

@@ -16,6 +16,10 @@ import (
 	"github.com/vsysoev/goeventstore/wsock"
 )
 
+const (
+	timeout = time.Millisecond * 10
+)
+
 func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
 	var (
 		evCh chan string
@@ -28,6 +32,11 @@ func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
 Loop:
 	for {
 		select {
+		case <-doneCh:
+			log.Println("Client disconnected. Exit goroutine")
+			evStore.Listenner().Unsubscribe(evCh)
+			//doneCh <- true
+			break Loop
 		case msg := <-fromWS:
 			log.Println("Message recieved in currentsrv", msg)
 			if evCh != nil {
@@ -48,16 +57,12 @@ Loop:
 			}
 			toWS <- &js
 			break
-		case <-doneCh:
-			log.Println("Client disconnected. Exit goroutine")
-			evStore.Listenner().Unsubscribe(evCh)
-			doneCh <- true
-			break Loop
-		default:
-			time.Sleep(time.Millisecond * 10)
+		case <-time.After(timeout):
+			fmt.Print(".")
 			break
 		}
 	}
+	log.Println("Exit clientProcessor")
 }
 func processClientConnection(s *wsock.Server, evStore *evstore.Connection) {
 	log.Println("Enter processClientConnection")
