@@ -2,7 +2,11 @@ package evstore
 
 import (
 	"encoding/json"
+	"log"
+	"math/rand"
+	"strconv"
 	"testing"
+	"time"
 
 	"gopkg.in/mgo.v2"
 
@@ -65,9 +69,9 @@ func TestEventStore(t *testing.T) {
 		mng, err := Dial(mongoURL, "test", "events")
 		So(mng, ShouldNotBeNil)
 		So(err, ShouldBeNil)
-		id, err := mng.Committer().SubmitEvent("", "{\"test\":\"value\"}")
+		err = mng.Committer().SubmitEvent("", "test", "{\"test\":\"value\"}")
 		So(err, ShouldBeNil)
-		id, err = mng.Committer().SubmitEvent(id, "{\"array\":[\"123\",\"345\", 45, 3445.456]}")
+		err = mng.Committer().SubmitEvent("", "test", "{\"array\":[\"123\",\"345\", 45, 3445.456]}")
 		So(err, ShouldBeNil)
 	})
 
@@ -90,10 +94,12 @@ func TestEventStore(t *testing.T) {
 				So(lastID, ShouldNotEqual, "")
 				break
 			default:
+				log.Println("Breaking loop")
 				break Loop
 			}
 		}
-		mng.Listenner().Unsubscribe(ch)
+		log.Println("Before mng.Close()")
+		mng.Close()
 	})
 
 	Convey("Close connection", t, func() {
@@ -103,16 +109,52 @@ func TestEventStore(t *testing.T) {
 		ch, err := mng.Listenner().Subscribe("")
 		So(err, ShouldBeNil)
 		So(ch, ShouldNotBeNil)
-		mng.Listenner().Unsubscribe(ch)
 		mng.Close()
 	})
 
-	Convey("Unsubscribe not subscribed", t, func() {
-		mng, err := Dial(mongoURL, "test", "events")
-		So(mng, ShouldNotBeNil)
+}
+func TestReadingEventAfterSubmitting(t *testing.T) {
+	Convey("When commit current message to database", t, func() {
+		ev, err := Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
-		mng.Listenner().Unsubscribe(nil)
-		mng.Close()
-	})
+		So(ev, ShouldNotBeNil)
 
+		ch, err := ev.Listenner().Subscribe("")
+		So(ch, ShouldNotBeNil)
+	Loop:
+		for {
+			select {
+			case <-ch:
+				//			fmt.Println(msg)
+				break
+			case <-time.After(time.Second):
+				break Loop
+			}
+		}
+		log.Println("All messages read")
+		for i := 1; i < 10; i++ {
+			timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+			log.Println(timestamp)
+			rand.Seed(time.Now().UTC().UnixNano())
+			boxID := strconv.Itoa(rand.Intn(100))
+			varID := strconv.Itoa(rand.Intn(200))
+			val := strconv.FormatFloat(rand.NormFloat64(), 'f', 2, 64)
+			sendMsg := "{\"datestamp\":\"" + timestamp + "\", \"box_id\": " + boxID + ", \"var_id\": " + varID + ", \"value\": " + val + "}"
+			err := ev.Committer().SubmitEvent("123", "scalar", sendMsg)
+			So(err, ShouldBeNil)
+			msg := ""
+			select {
+			case msg = <-ch:
+				log.Println("Cought last message", msg)
+				break
+			case <-time.After(time.Second * 1):
+				msg = "{\"event\":{\"error\": \"This is fucking shit error\"}}"
+				break
+			}
+			var msgJSON map[string]interface{}
+			err = json.Unmarshal([]byte(msg), &msgJSON)
+			So(msgJSON["event"].(map[string]interface{})["datestamp"].(string), ShouldEqual, timestamp)
+		}
+		ev.Close()
+	})
 }

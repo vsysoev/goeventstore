@@ -35,7 +35,7 @@ type (
 	}
 	// Committer interface defines method to commit new event to eventstore
 	Committer interface {
-		SubmitEvent(sequenceID string, eventJSON string) (string, error)
+		SubmitEvent(sequenceID string, tag string, eventJSON string) error
 	}
 	// Listenner interface defines method to listen events from the datastore
 	Listenner interface {
@@ -78,20 +78,27 @@ func (c *Connection) Listenner() Listenner {
 }
 
 // SubmitEvent submittes event to event store
-func (c *CommitterT) SubmitEvent(sequenceID string, eventJSON string) (string, error) {
+func (c *CommitterT) SubmitEvent(sequenceID string, tag string, eventJSON string) error {
 	var object map[string]interface{}
 	err := json.Unmarshal([]byte(eventJSON), &object)
 	if err != nil {
-		return "", err
+		log.Println(err)
+		return err
 	}
 	event := make(map[string]interface{})
+	event["sequenceID"] = sequenceID
+	event["tag"] = tag
 	event["event"] = object
 	err = c.p.session.DB(c.p.dbName).C(c.p.eventCollection).Insert(event)
 	if err != nil {
-		return "", err
+		log.Println(err)
+		return err
 	}
 	err = c.p.session.DB(c.p.dbName).C(c.p.triggerCollection).Insert(bson.M{"trigger": 1})
-	return "", err
+	if err != nil {
+		log.Println(err)
+	}
+	return err
 }
 
 // ReadEvents Read JSON events started from fromId to slice of strings
@@ -100,6 +107,9 @@ func (e *ListennerT) readEvents(fromID string) (*mgo.Iter, error) {
 		iter *mgo.Iter
 	)
 	if fromID != "" {
+		if !bson.IsObjectIdHex(fromID) {
+			return nil, errors.New("Error: Incorrect fromID " + fromID)
+		}
 		objID := bson.ObjectIdHex(fromID)
 		iter = e.p.session.DB(e.p.dbName).C(e.p.eventCollection).Find(bson.M{"_id": bson.M{"$gt": objID}}).Iter()
 	} else {
@@ -128,21 +138,17 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 			oneEvent map[string]interface{}
 		)
 		defer func() {
-			log.Println("Fire close(outChan)")
-			if iter != nil {
-				iter.Close()
-			}
+			//			if iter != nil {
+			//			iter.Close()
+			//	}
+			e.done <- true
 			close(outChan)
 		}()
-		log.Println("Find last two triggered ids")
 		iterLast := cTrigger.Find(nil).Sort("-$natural").Limit(2).Iter()
-		log.Println("Find.Sort.Limit.Iter returned")
 		for iterLast.Next(&result) {
 			lastTriggerID = result["_id"].(bson.ObjectId).Hex()
 		}
-		log.Println("Before iterLast.Close")
 		iterLast.Close()
-		log.Println("LasttriggerID", lastTriggerID)
 		iter = cTrigger.Find(bson.M{"_id": bson.M{"$gt": bson.ObjectIdHex(lastTriggerID)}}).Sort("$natural").Tail(10 * time.Millisecond)
 	Loop:
 		for {
@@ -150,13 +156,14 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 				lastTriggerID = result["_id"].(bson.ObjectId).Hex()
 				evIter, err := e.readEvents(lastEventID)
 				if err != nil {
+					log.Println(err)
 					return
 				}
 				for evIter.Next(&oneEvent) {
-					log.Println(oneEvent)
-					lastEventID = string(oneEvent["_id"].(bson.ObjectId))
+					lastEventID = string(oneEvent["_id"].(bson.ObjectId).Hex())
 					s, err := json.Marshal(oneEvent)
 					if err != nil {
+						log.Println(err)
 						return
 					}
 					select {
@@ -170,7 +177,9 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 				}
 				evIter.Close()
 			}
-			if iter.Err() != nil {
+			er := iter.Err()
+			if er != nil {
+				log.Println(er)
 				return
 			}
 			select {
@@ -189,13 +198,11 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 		}
 		return
 	}()
-	log.Println("Returned from Subscribe")
 	return outChan, nil
 }
 
 // Unsubscribe closes channel
 func (e *ListennerT) Unsubscribe(eventChannel chan string) {
-	log.Println("Enter unsubscribe")
 	if eventChannel == nil {
 		return
 	}
@@ -205,9 +212,7 @@ func (e *ListennerT) Unsubscribe(eventChannel chan string) {
 	default:
 		break
 	}
-	log.Println("Send e.done")
 	e.done <- true
-	log.Println("Exit unsubscribe")
 }
 
 func contains(col []string, target string) bool {

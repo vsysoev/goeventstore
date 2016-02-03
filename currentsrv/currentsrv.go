@@ -13,6 +13,7 @@ import (
 
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
+	"github.com/vsysoev/goeventstore/state"
 	"github.com/vsysoev/goeventstore/wsock"
 )
 
@@ -20,11 +21,16 @@ const (
 	timeout = time.Millisecond * 10
 )
 
+type (
+	ScalarState map[int]map[int]interface{}
+)
+
 func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
 	var (
 		evCh chan string
 		err  error
 	)
+	//	state := make(ScalarState)
 	fmt.Println("clientProcessor Client connected. ", c)
 	fromWS, toWS, doneCh := c.GetChannels()
 	fmt.Print("Before evStore.Subscribe")
@@ -89,6 +95,24 @@ Loop:
 	}
 	log.Println("processClientConnection exited")
 }
+
+func currentStateStore(evStore *evstore.Connection, sReader current.StateReader, sUpdater current.StateUpdater) {
+	evCh, err := evStore.Listenner().Subscribe("")
+	if err != nil {
+		return
+	}
+	defer func() {
+		evStore.Listenner().Unsubscribe(evCh)
+	}()
+	select {
+	case msg := <-evCh:
+		log.Println(msg)
+		break
+	case <-time.After(timeout):
+		break
+	}
+	return
+}
 func main() {
 	f, err := os.Create("currentsrv.prof")
 	if err != nil {
@@ -116,6 +140,8 @@ func main() {
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
 	}
+	stateReader, stateUpdater := current.NewState()
+	go currentStateStore(evStore, stateReader, stateUpdater)
 	go processClientConnection(wsServer, evStore)
 	go wsServer.Listen()
 
