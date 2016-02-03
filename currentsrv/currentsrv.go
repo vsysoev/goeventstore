@@ -22,13 +22,14 @@ const (
 )
 
 type (
-	ScalarState map[int]map[int]interface{}
+	ScalarState map[int]map[int]*wsock.MessageT
 )
 
 func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
 	var (
-		evCh chan string
-		err  error
+		evCh   chan string
+		err    error
+		sState ScalarState
 	)
 	//	state := make(ScalarState)
 	fmt.Println("clientProcessor Client connected. ", c)
@@ -40,14 +41,11 @@ Loop:
 		select {
 		case <-doneCh:
 			log.Println("Client disconnected. Exit goroutine")
-			evStore.Listenner().Unsubscribe(evCh)
+			evStore.Close()
 			//doneCh <- true
 			break Loop
 		case msg := <-fromWS:
 			log.Println("Message recieved in currentsrv", msg)
-			if evCh != nil {
-				evStore.Listenner().Unsubscribe(evCh)
-			}
 			evCh, err = evStore.Listenner().Subscribe("")
 			if err != nil {
 				log.Println("Can't subscribe to evStore", err)
@@ -61,10 +59,19 @@ Loop:
 			if err != nil {
 				log.Print("Error event unmarshaling to JSON.", msg)
 			}
-			toWS <- &js
+			if js["tag"] == "scalar" {
+				boxID := js["event"].(map[string]interface{})["box_id"].(int)
+				varID := js["event"].(map[string]interface{})["var_id"].(int)
+				sState[boxID][varID] = &js
+			}
 			break
 		case <-time.After(timeout):
 			fmt.Print(".")
+			for _, v := range sState {
+				for _, oneJS := range v {
+					toWS <- oneJS
+				}
+			}
 			break
 		}
 	}
