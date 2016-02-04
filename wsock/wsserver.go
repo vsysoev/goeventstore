@@ -41,7 +41,6 @@ func NewServer(pattern string) *Server {
 
 // Add adds new client to server
 func (s *Server) Add(c *Client) {
-	log.Println("Send client to ADD channel", s.addCh, c)
 	s.addCh <- c
 	log.Println("Sent client to ADD channel", s.addCh, c)
 }

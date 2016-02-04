@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -26,20 +25,18 @@ func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
 		err  error
 	)
 	//	state := make(ScalarState)
-	fmt.Println("clientProcessor Client connected. ", c)
+	log.Println("clientProcessor Client connected. ", c)
 	fromWS, toWS, doneCh := c.GetChannels()
-	fmt.Print("Before evStore.Subscribe")
 	log.Println("Enter main loop serving client")
 Loop:
 	for {
 		select {
 		case <-doneCh:
 			log.Println("Client disconnected. Exit goroutine")
-			evStore.Close()
-			//doneCh <- true
+			evStore.Listenner().Unsubscribe(evCh)
 			break Loop
 		case msg := <-fromWS:
-			log.Println("Message recieved in currentsrv", msg)
+			log.Println("Message recieved from WS", msg)
 			evCh, err = evStore.Listenner().Subscribe("")
 			if err != nil {
 				log.Println("Can't subscribe to evStore", err)
@@ -54,9 +51,6 @@ Loop:
 				log.Print("Error event unmarshaling to JSON.", msg)
 			}
 			toWS <- &js
-			break
-		case <-time.After(timeout):
-			fmt.Print(".")
 			break
 		}
 	}
@@ -79,10 +73,8 @@ Loop:
 		case <-doneCh:
 			log.Println("doneCh got message")
 			break Loop
-		default:
-			fmt.Print("*")
-			time.Sleep(time.Millisecond * 10)
-			break
+			//		case <-time.After(timeout):
+			//			break
 		}
 	}
 	log.Println("processClientConnection exited")
@@ -100,7 +92,7 @@ func main() {
 	go func() {
 		select {
 		case <-c:
-			fmt.Println("Stop profiling")
+			log.Println("Stop profiling")
 			pprof.StopCPUProfile()
 			syscall.Exit(0)
 		}

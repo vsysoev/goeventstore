@@ -31,21 +31,18 @@ func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
 		err    error
 		sState ScalarState
 	)
-	//	state := make(ScalarState)
-	fmt.Println("clientProcessor Client connected. ", c)
+	sState = make(ScalarState)
 	fromWS, toWS, doneCh := c.GetChannels()
-	fmt.Print("Before evStore.Subscribe")
 	log.Println("Enter main loop serving client")
 Loop:
 	for {
 		select {
 		case <-doneCh:
 			log.Println("Client disconnected. Exit goroutine")
-			evStore.Close()
+			evStore.Listenner().Unsubscribe(evCh)
 			//doneCh <- true
 			break Loop
-		case msg := <-fromWS:
-			log.Println("Message recieved in currentsrv", msg)
+		case <-fromWS:
 			evCh, err = evStore.Listenner().Subscribe("")
 			if err != nil {
 				log.Println("Can't subscribe to evStore", err)
@@ -53,25 +50,26 @@ Loop:
 			}
 			break
 		case msg := <-evCh:
-			log.Println("Msg received", msg)
 			js := wsock.MessageT{}
 			err := json.Unmarshal([]byte(msg), &js)
 			if err != nil {
 				log.Print("Error event unmarshaling to JSON.", msg)
 			}
 			if js["tag"] == "scalar" {
-				boxID := js["event"].(map[string]interface{})["box_id"].(int)
-				varID := js["event"].(map[string]interface{})["var_id"].(int)
+				boxID := int(js["event"].(map[string]interface{})["box_id"].(float64))
+				varID := int(js["event"].(map[string]interface{})["var_id"].(float64))
+				log.Println("Update state", boxID, varID, js)
+				sState[boxID] = make(map[int]*wsock.MessageT)
 				sState[boxID][varID] = &js
 			}
 			break
 		case <-time.After(timeout):
-			fmt.Print(".")
 			for _, v := range sState {
 				for _, oneJS := range v {
 					toWS <- oneJS
 				}
 			}
+			sState = make(ScalarState)
 			break
 		}
 	}
@@ -94,10 +92,6 @@ Loop:
 		case <-doneCh:
 			log.Println("doneCh got message")
 			break Loop
-		default:
-			fmt.Print("*")
-			time.Sleep(time.Millisecond * 10)
-			break
 		}
 	}
 	log.Println("processClientConnection exited")
