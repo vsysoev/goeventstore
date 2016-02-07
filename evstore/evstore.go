@@ -59,6 +59,17 @@ func Dial(url string, dbName string, eventCollection string) (*Connection, error
 	c.listenner = &ListennerT{}
 	c.listenner.p = &c
 	c.committer.p = &c
+	collections, err := c.session.DB(dbName).CollectionNames()
+	if err != nil {
+		return nil, err
+	}
+	if !contains(collections, c.triggerCollection) {
+		cInfo := mgo.CollectionInfo{
+			Capped:   true,
+			MaxBytes: 1000000,
+		}
+		c.session.DB(dbName).C(c.triggerCollection).Create(&cInfo)
+	}
 	return &c, nil
 }
 
