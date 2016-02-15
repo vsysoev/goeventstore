@@ -133,6 +133,7 @@ func main() {
 	}()
 
 	props := property.Init()
+
 	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.events"])
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)

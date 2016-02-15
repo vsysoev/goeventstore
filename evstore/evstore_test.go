@@ -19,7 +19,7 @@ type (
 	PositiveListenner struct{}
 )
 
-func TestJSONUnmarshalling(t *testing.T) {
+func SkipTestJSONUnmarshalling(t *testing.T) {
 	Convey("Simple json unmarshalling", t, func() {
 		simpleJSON := "{\"name\":\"value\"}"
 		var objmap interface{}
@@ -28,7 +28,7 @@ func TestJSONUnmarshalling(t *testing.T) {
 	})
 }
 
-func TestMongoCollections(t *testing.T) {
+func SkipTestMongoCollections(t *testing.T) {
 	Convey("Test if CollectionNames() returns not empty string array", t, func() {
 		mgoSession, err := mgo.Dial(mongoURL)
 		So(err, ShouldBeNil)
@@ -52,7 +52,7 @@ func TestMongoCollections(t *testing.T) {
 	})
 }
 
-func TestEventStore(t *testing.T) {
+func SkipTestEventStore(t *testing.T) {
 
 	Convey("Test if contains works", t, func() {
 		arr := []string{"value1", "value2", "value3"}
@@ -113,7 +113,7 @@ func TestEventStore(t *testing.T) {
 	})
 
 }
-func TestReadingEventAfterSubmitting(t *testing.T) {
+func SkipTestReadingEventAfterSubmitting(t *testing.T) {
 	Convey("When commit current message to database", t, func() {
 		ev, err := Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
@@ -157,4 +157,23 @@ func TestReadingEventAfterSubmitting(t *testing.T) {
 		}
 		ev.Close()
 	})
+}
+func TestListen2Interface(t *testing.T) {
+	Convey("Check connection to database", t, func() {
+		ev, err := Dial(mongoURL, "test", "events")
+		So(err, ShouldBeNil)
+		So(ev, ShouldNotBeNil)
+		err = ev.Listenner2().Subscribe2("scalar", sampleHandler)
+		So(err, ShouldBeNil)
+		done := make(chan bool)
+		go ev.Listenner2().Listen("", done)
+		<-time.After(time.Second * 3)
+		done <- true
+		ev.Listenner2().Unsubscribe2("scalars")
+		ev.Close()
+	})
+}
+func sampleHandler(event interface{}) {
+	log.Println(event)
+	return
 }
