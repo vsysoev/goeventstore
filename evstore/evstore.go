@@ -281,6 +281,9 @@ func (e *ListennerT) readEventsLimit(filter string, fromID string, limit int) ([
 		result []interface{}
 		q      bson.M
 	)
+	//TODO: Make copy session mongodb
+	sessionCopy := e.p.session.Copy()
+	defer sessionCopy.Close()
 	q = make(bson.M)
 	f := []string{filter}
 	if filter != "" {
@@ -293,13 +296,12 @@ func (e *ListennerT) readEventsLimit(filter string, fromID string, limit int) ([
 		objID := bson.ObjectIdHex(fromID)
 		q["_id"] = bson.M{"$gt": objID}
 	}
-	err = e.p.session.DB(e.p.dbName).C(e.p.stream).Find(q).Limit(limit).All(&result)
+	err = sessionCopy.DB(e.p.dbName).C(e.p.stream).Find(q).Limit(limit).All(&result)
 	return result, err
 }
 
 func (e *ListennerT) processSubscription(filter string, id string, handler Handler, wg *sync.WaitGroup, done <-chan bool) {
 	defer func() {
-		// TODO: Here should be panic/recover
 		if r := recover(); r != nil {
 			fmt.Println("Handler function panic detected. Recovering", r)
 		}
