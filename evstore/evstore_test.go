@@ -169,11 +169,27 @@ func TestListen2Interface(t *testing.T) {
 		go ev.Listenner2().Listen("", done)
 		<-time.After(time.Second * 3)
 		done <- true
-		ev.Listenner2().Unsubscribe2("scalars")
+		ev.Listenner2().Unsubscribe2("scalar")
+		ev.Close()
+	})
+	Convey("When do panic in handler should not panic", t, func() {
+		ev, err := Dial(mongoURL, "test", "events")
+		So(err, ShouldBeNil)
+		So(ev, ShouldNotBeNil)
+		err = ev.Listenner2().Subscribe2("scalar", panicHandler)
+		So(err, ShouldBeNil)
+		done := make(chan bool)
+		go ev.Listenner2().Listen("", done)
+		<-time.After(time.Second * 3)
+		done <- true
+		ev.Listenner2().Unsubscribe2("scalar")
 		ev.Close()
 	})
 }
 func sampleHandler(event interface{}) {
 	log.Println(event)
 	return
+}
+func panicHandler(event interface{}) {
+	panic("panic Handler fired")
 }

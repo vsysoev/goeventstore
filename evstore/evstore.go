@@ -3,6 +3,7 @@ package evstore
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -270,6 +271,7 @@ func (e *ListennerT) Listen(id string, done <-chan bool) error {
 		e.wg.Add(1)
 		go e.processSubscription(filter, id, handler, e.wg, done)
 	}
+	<-done
 	e.wg.Wait()
 	return nil
 }
@@ -282,7 +284,7 @@ func (e *ListennerT) readEventsLimit(filter string, fromID string, limit int) ([
 	q = make(bson.M)
 	f := []string{filter}
 	if filter != "" {
-		q["tag"] = bson.M{ "$in": f}
+		q["tag"] = bson.M{"$in": f}
 	}
 	if fromID != "" {
 		if !bson.IsObjectIdHex(fromID) {
@@ -298,6 +300,9 @@ func (e *ListennerT) readEventsLimit(filter string, fromID string, limit int) ([
 func (e *ListennerT) processSubscription(filter string, id string, handler Handler, wg *sync.WaitGroup, done <-chan bool) {
 	defer func() {
 		// TODO: Here should be panic/recover
+		if r := recover(); r != nil {
+			fmt.Println("Handler function panic detected. Recovering", r)
+		}
 		wg.Done()
 	}()
 	for {
@@ -314,7 +319,7 @@ func (e *ListennerT) processSubscription(filter string, id string, handler Handl
 		select {
 		case <-done:
 			return
-		case <-time.After(time.Millisecond *10):
+		case <-time.After(time.Millisecond * 10):
 			break
 		}
 
