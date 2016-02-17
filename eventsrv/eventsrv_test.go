@@ -1,13 +1,14 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
 	"strconv"
 	"testing"
 	"time"
+
+	"golang.org/x/net/context"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/vsysoev/goeventstore/evstore"
@@ -17,8 +18,11 @@ const (
 	mongoURL string = "mongodb://127.0.0.1"
 )
 
-func handlerTest(events []interface{}, ctx Context) {
-
+func handlerTest(ctx context.Context, events []interface{}) {
+	for _, ev := range events {
+		log.Println(ev)
+		//		ctx.Value("id") = ev.(bson.M)["_id"].(bson.ObjectId).Hex()
+	}
 }
 func TestEventSrv(t *testing.T) {
 	Convey("When commit current message to database", t, func() {
@@ -26,20 +30,16 @@ func TestEventSrv(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 
-		ch, err := ev.Listenner2().Subscribe2("", handlerTest)
-		So(ch, ShouldNotBeNil)
-	Loop:
-		for {
-			select {
-			case <-ch:
-				//			fmt.Println(msg)
-				break
-			case <-time.After(time.Second):
-				break Loop
-			}
-		}
+		err = ev.Listenner2().Subscribe2("", handlerTest)
+		So(err, ShouldBeNil)
+		ctx := context.WithValue(context.Background(), "test", t)
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		go ev.Listenner2().Listen(ctx, "")
+		<-time.After(time.Second * 2)
+
 		fmt.Println("All messages read")
-		for i := 1; i < 10; i++ {
+		for i := 0; i < 10; i++ {
 			timestamp := strconv.FormatInt(time.Now().Unix(), 10)
 			log.Println(timestamp)
 			rand.Seed(time.Now().UTC().UnixNano())
@@ -49,19 +49,8 @@ func TestEventSrv(t *testing.T) {
 			sendMsg := "{\"datestamp\":\"" + timestamp + "\", \"box_id\": " + boxID + ", \"var_id\": " + varID + ", \"value\": " + val + "}"
 			err = ev.Committer().SubmitEvent("123", "scalar", sendMsg)
 			So(err, ShouldBeNil)
-			msg := ""
-			select {
-			case msg = <-ch:
-				break
-			case <-time.After(time.Second * 10):
-				msg = "{\"event\":{\"error\": \"This is fucking shit error\"}}"
-				break
-			}
-			var msgJSON map[string]interface{}
-			err = json.Unmarshal([]byte(msg), &msgJSON)
-			So(msgJSON["event"].(map[string]interface{})["datestamp"].(string), ShouldEqual, timestamp)
-
 		}
+		<-time.After(time.Second * 3)
 		ev.Close()
 	})
 }

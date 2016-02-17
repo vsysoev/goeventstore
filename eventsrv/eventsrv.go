@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
 	"github.com/vsysoev/goeventstore/wsock"
@@ -20,9 +22,11 @@ const (
 )
 
 // TODO: Implementes messageHandler
-func messageHandler(msg []interface{}) {
+func messageHandler(ctx context.Context, msg []interface{}) {
 
 }
+
+// TODO: should be context.Context used to pass wsock.Client
 func clientHandler(c *wsock.Client, evStore *evstore.Connection) {
 	var (
 		evCh chan string
@@ -61,6 +65,8 @@ Loop:
 	}
 	log.Println("Exit clientProcessor")
 }
+
+// TODO: implement context creation for the server
 func processClientConnection(s *wsock.Server, evStore *evstore.Connection) {
 	log.Println("Enter processClientConnection")
 	addCh, delCh, doneCh, _ := s.GetChannels()
