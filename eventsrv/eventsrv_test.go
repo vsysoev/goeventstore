@@ -17,13 +17,16 @@ const (
 	mongoURL string = "mongodb://127.0.0.1"
 )
 
-func TestCurrentScalarState(t *testing.T) {
+func handlerTest(events []interface{}, ctx Context) {
+
+}
+func TestEventSrv(t *testing.T) {
 	Convey("When commit current message to database", t, func() {
 		ev, err := evstore.Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 
-		ch, err := ev.Listenner().Subscribe("")
+		ch, err := ev.Listenner2().Subscribe2("", handlerTest)
 		So(ch, ShouldNotBeNil)
 	Loop:
 		for {

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -49,11 +51,11 @@ type (
 	}
 
 	// Handler type defines function which will be used as callback
-	Handler    func(event interface{})
+	Handler    func(ctx context.Context, event []interface{})
 	Listenner2 interface {
 		Subscribe2(eventTypes string, handlerFunc Handler) error
 		Unsubscribe2(eventTypes string)
-		Listen(id string, done <-chan bool) error
+		Listen(ctx context.Context, id string) error
 	}
 )
 
@@ -263,16 +265,15 @@ func (e *ListennerT) Unsubscribe2(eventType string) {
 
 // Listen start go routines which listen event in event stream and execute Handler
 // TODO: Handler should be executed with panic/recover
-func (e *ListennerT) Listen(id string, done <-chan bool) error {
+func (e *ListennerT) Listen(ctx context.Context, id string) error {
 	if e.p.session == nil {
 		return errors.New("Mongo isn't connected. Please use Dial().")
 	}
 	for filter, handler := range e.filter {
-		e.wg.Add(1)
-		go e.processSubscription(filter, id, handler, e.wg, done)
+		go e.processSubscription(ctx, filter, id, handler)
 	}
-	<-done
-	e.wg.Wait()
+	<-ctx.Done()
+	log.Println("Return from Listen")
 	return nil
 }
 func (e *ListennerT) readEventsLimit(filter string, fromID string, limit int) ([]interface{}, error) {
@@ -281,7 +282,6 @@ func (e *ListennerT) readEventsLimit(filter string, fromID string, limit int) ([
 		result []interface{}
 		q      bson.M
 	)
-	//TODO: Make copy session mongodb
 	sessionCopy := e.p.session.Copy()
 	defer sessionCopy.Close()
 	q = make(bson.M)
@@ -300,12 +300,11 @@ func (e *ListennerT) readEventsLimit(filter string, fromID string, limit int) ([
 	return result, err
 }
 
-func (e *ListennerT) processSubscription(filter string, id string, handler Handler, wg *sync.WaitGroup, done <-chan bool) {
+func (e *ListennerT) processSubscription(ctx context.Context, filter string, id string, handler Handler) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Handler function panic detected. Recovering", r)
 		}
-		wg.Done()
 	}()
 	for {
 		result, err := e.readEventsLimit(filter, id, 100)
@@ -313,13 +312,14 @@ func (e *ListennerT) processSubscription(filter string, id string, handler Handl
 			log.Println(err)
 			return
 		}
-		for _, ev := range result {
-			handler(ev)
-			id = ev.(bson.M)["_id"].(bson.ObjectId).Hex()
-			log.Println("Last objectID", id)
+		//TODO: send all array as one message
+		handler(ctx, result)
+		if len(result) > 0 {
+			id = result[len(result)-1].(bson.M)["_id"].(bson.ObjectId).Hex()
 		}
 		select {
-		case <-done:
+		case <-ctx.Done():
+			log.Println("Ctx.Done in processSubscription")
 			return
 		case <-time.After(time.Millisecond * 10):
 			break

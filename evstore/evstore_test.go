@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"gopkg.in/mgo.v2"
 
 	. "github.com/smartystreets/goconvey/convey"
@@ -165,10 +167,9 @@ func TestListen2Interface(t *testing.T) {
 		So(ev, ShouldNotBeNil)
 		err = ev.Listenner2().Subscribe2("scalar", sampleHandler)
 		So(err, ShouldBeNil)
-		done := make(chan bool)
-		go ev.Listenner2().Listen("", done)
-		<-time.After(time.Second * 3)
-		done <- true
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*3)
+		go ev.Listenner2().Listen(ctx, "")
+		<-ctx.Done()
 		ev.Listenner2().Unsubscribe2("scalar")
 		ev.Close()
 	})
@@ -178,18 +179,20 @@ func TestListen2Interface(t *testing.T) {
 		So(ev, ShouldNotBeNil)
 		err = ev.Listenner2().Subscribe2("scalar", panicHandler)
 		So(err, ShouldBeNil)
-		done := make(chan bool)
-		go ev.Listenner2().Listen("", done)
-		<-time.After(time.Second * 3)
-		done <- true
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*3)
+		go ev.Listenner2().Listen(ctx, "")
+		<-ctx.Done()
 		ev.Listenner2().Unsubscribe2("scalar")
 		ev.Close()
 	})
 }
-func sampleHandler(event interface{}) {
-	log.Println(event)
+func sampleHandler(ctx context.Context, events []interface{}) {
+	for _, event := range events {
+		log.Println(event)
+	}
+
 	return
 }
-func panicHandler(event interface{}) {
+func panicHandler(ctx context.Context, event []interface{}) {
 	panic("panic Handler fired")
 }

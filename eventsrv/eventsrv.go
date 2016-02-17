@@ -19,7 +19,11 @@ const (
 	timeout = time.Millisecond * 10
 )
 
-func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
+// TODO: Implementes messageHandler
+func messageHandler(msg []interface{}) {
+
+}
+func clientHandler(c *wsock.Client, evStore *evstore.Connection) {
 	var (
 		evCh chan string
 		err  error
@@ -37,6 +41,7 @@ Loop:
 			break Loop
 		case msg := <-fromWS:
 			log.Println("Message recieved from WS", msg)
+			//TODO: Run ev.Store.Listenner2.ListenAndServe()
 			evCh, err = evStore.Listenner().Subscribe("")
 			if err != nil {
 				log.Println("Can't subscribe to evStore", err)
@@ -65,7 +70,7 @@ Loop:
 		select {
 		case cli := <-addCh:
 			log.Println("processClientConnection got add client notification", cli)
-			go clientProcessor(cli, evStore)
+			go clientHandler(cli, evStore)
 			break
 		case cli := <-delCh:
 			log.Println("delCh go client", cli)
