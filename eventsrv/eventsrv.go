@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -21,16 +20,25 @@ const (
 	timeout = time.Millisecond * 10
 )
 
-// TODO: Implementes messageHandler
-func messageHandler(ctx context.Context, msg []interface{}) {
+// DOING:0 Move to Listenner2 and callback
 
+// TODO:0 Implementes messageHandler
+func messageHandler(ctx context.Context, msg []interface{}) {
+	log.Println("Msgs received")
+	toWS := ctx.Value("toWS").(chan *wsock.MessageT)
+
+	js := wsock.MessageT{}
+	log.Println("Before unmarshaling")
+	js["msgs"] = msg
+	log.Println("After unmarshaling", js)
+	toWS <- &js
+	log.Println("Msg sent")
 }
 
-// TODO: should be context.Context used to pass wsock.Client
+// TODO:50 should be context.Context used to pass wsock.Client
 func clientHandler(c *wsock.Client, evStore *evstore.Connection) {
 	var (
-		evCh chan string
-		err  error
+		err error
 	)
 	//	state := make(ScalarState)
 	log.Println("clientProcessor Client connected. ", c)
@@ -41,32 +49,36 @@ Loop:
 		select {
 		case <-doneCh:
 			log.Println("Client disconnected. Exit goroutine")
-			evStore.Listenner().Unsubscribe(evCh)
 			break Loop
 		case msg := <-fromWS:
 			log.Println("Message recieved from WS", msg)
-			//TODO: Run ev.Store.Listenner2.ListenAndServe()
-			evCh, err = evStore.Listenner().Subscribe("")
-			if err != nil {
-				log.Println("Can't subscribe to evStore", err)
-				return
+			if tag, ok := (*msg)["tag"].(string); ok {
+				err = evStore.Listenner2().Subscribe2(tag, messageHandler)
+				if err != nil {
+					log.Println("Can't subscribe to evStore", err)
+					return
+				}
+				ctx := context.WithValue(context.Background(), "toWS", toWS)
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+				id := ""
+				if id, ok = (*msg)["id"].(string); ok {
+				}
+				go evStore.Listenner2().Listen(ctx, id)
+			} else {
+				log.Println("Can't find tag in message", msg)
+				js := wsock.MessageT{}
+				js["response"] = "ERROR: No tag to subscribe"
+				toWS <- &js
 			}
 			break
-		case msg := <-evCh:
-			log.Println("Msg received", msg)
-			js := wsock.MessageT{}
-			err := json.Unmarshal([]byte(msg), &js)
-			if err != nil {
-				log.Print("Error event unmarshaling to JSON.", msg)
-			}
-			toWS <- &js
-			break
+
 		}
 	}
 	log.Println("Exit clientProcessor")
 }
 
-// TODO: implement context creation for the server
+// TODO:30 implement context creation for the server
 func processClientConnection(s *wsock.Server, evStore *evstore.Connection) {
 	log.Println("Enter processClientConnection")
 	addCh, delCh, doneCh, _ := s.GetChannels()
@@ -110,7 +122,7 @@ func main() {
 	}()
 
 	props := property.Init()
-	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.events"])
+	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.stream"])
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}

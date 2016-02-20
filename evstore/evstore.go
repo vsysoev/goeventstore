@@ -264,7 +264,7 @@ func (e *ListennerT) Unsubscribe2(eventType string) {
 }
 
 // Listen start go routines which listen event in event stream and execute Handler
-// TODO: Handler should be executed with panic/recover
+// DONE:0 Handler should be executed with panic/recover
 func (e *ListennerT) Listen(ctx context.Context, id string) error {
 	if e.p.session == nil {
 		return errors.New("Mongo isn't connected. Please use Dial().")
@@ -312,9 +312,8 @@ func (e *ListennerT) processSubscription(ctx context.Context, filter string, id 
 			log.Println(err)
 			return
 		}
-		//TODO: send all array as one message
-		handler(ctx, result)
 		if len(result) > 0 {
+			handler(ctx, result)
 			id = result[len(result)-1].(bson.M)["_id"].(bson.ObjectId).Hex()
 			log.Println("Last id read", id)
 		}

@@ -17,7 +17,7 @@ const (
 var maxID int
 
 type (
-	// ClientT struct holds client connection information
+	// Client struct holds client connection information
 	Client struct {
 		id     int
 		ws     *websocket.Conn
@@ -70,11 +70,12 @@ func (c *Client) Write(msg *MessageT) {
 	case c.fromWS <- msg:
 	default:
 		c.server.Del(c)
-		err := fmt.Errorf("client %d is disconnected.", c.id)
+		err := fmt.Errorf("client %d is disconnected ", c.id)
 		c.server.Err(err)
 	}
 }
 
+// Done sends done signal to done channel
 func (c *Client) Done() {
 	log.Println("Client.Done send doneCh")
 	c.doneCh <- true
