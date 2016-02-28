@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,9 +10,12 @@ import (
 	"syscall"
 	"time"
 
+	"gopkg.in/mgo.v2/bson"
+
+	"golang.org/x/net/context"
+
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
-	"github.com/vsysoev/goeventstore/state"
 	"github.com/vsysoev/goeventstore/wsock"
 )
 
@@ -22,16 +24,46 @@ const (
 )
 
 type (
-	ScalarState map[int]map[int]*wsock.MessageT
+	ScalarState map[int]map[int]*bson.M
 )
+
+func (s ScalarState) serialize2Slice() []*bson.M {
+	list := make([]*bson.M, 1)
+	for _, box := range s {
+		for _, val := range box {
+			list = append(list, val)
+		}
+	}
+	return list
+}
+
+func messageHandler(ctx context.Context, msgs []interface{}) {
+	var sState ScalarState
+	sState = make(ScalarState)
+	log.Println("Msgs received")
+	toWS := ctx.Value("toWS").(chan *wsock.MessageT)
+	for _, v := range msgs {
+		if v.(bson.M)["tag"] == "scalar" {
+			boxID := int(v.(bson.M)["event"].(bson.M)["box_id"].(float64))
+			varID := int(v.(bson.M)["event"].(bson.M)["var_id"].(float64))
+			log.Println("Update state", boxID, varID, v)
+			sState[boxID] = make(map[int]*bson.M)
+			vV := v.(bson.M)
+			sState[boxID][varID] = &vV
+		}
+	}
+	out := wsock.MessageT{}
+	out["state"] = sState.serialize2Slice()
+	log.Println(out)
+	toWS <- &out
+	log.Println("State sent")
+}
 
 func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
 	var (
-		evCh   chan string
-		err    error
-		sState ScalarState
+		evCh chan string
+		err  error
 	)
-	sState = make(ScalarState)
 	fromWS, toWS, doneCh := c.GetChannels()
 	log.Println("Enter main loop serving client")
 Loop:
@@ -42,34 +74,27 @@ Loop:
 			evStore.Listenner().Unsubscribe(evCh)
 			//doneCh <- true
 			break Loop
-		case <-fromWS:
-			evCh, err = evStore.Listenner().Subscribe("")
-			if err != nil {
-				log.Println("Can't subscribe to evStore", err)
-				return
-			}
-			break
-		case msg := <-evCh:
-			js := wsock.MessageT{}
-			err := json.Unmarshal([]byte(msg), &js)
-			if err != nil {
-				log.Print("Error event unmarshaling to JSON.", msg)
-			}
-			if js["tag"] == "scalar" {
-				boxID := int(js["event"].(map[string]interface{})["box_id"].(float64))
-				varID := int(js["event"].(map[string]interface{})["var_id"].(float64))
-				log.Println("Update state", boxID, varID, js)
-				sState[boxID] = make(map[int]*wsock.MessageT)
-				sState[boxID][varID] = &js
-			}
-			break
-		case <-time.After(timeout):
-			for _, v := range sState {
-				for _, oneJS := range v {
-					toWS <- oneJS
+		case msg := <-fromWS:
+			log.Println("Try to subscribe for ", msg)
+			if tag, ok := (*msg)["tag"].(string); ok {
+				err = evStore.Listenner2().Subscribe2(tag, messageHandler)
+				if err != nil {
+					log.Println("Can't subscribe to evStore", err)
+					return
 				}
+				ctx := context.WithValue(context.Background(), "toWS", toWS)
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+				id := ""
+				if id, ok = (*msg)["id"].(string); ok {
+				}
+				go evStore.Listenner2().Listen(ctx, id)
+			} else {
+				log.Println("Can't find tag in message", msg)
+				js := wsock.MessageT{}
+				js["response"] = "ERROR: No tag to subscribe"
+				toWS <- &js
 			}
-			sState = make(ScalarState)
 			break
 		}
 	}
@@ -97,23 +122,6 @@ Loop:
 	log.Println("processClientConnection exited")
 }
 
-func currentStateStore(evStore *evstore.Connection, sReader current.StateReader, sUpdater current.StateUpdater) {
-	evCh, err := evStore.Listenner().Subscribe("")
-	if err != nil {
-		return
-	}
-	defer func() {
-		evStore.Listenner().Unsubscribe(evCh)
-	}()
-	select {
-	case msg := <-evCh:
-		log.Println(msg)
-		break
-	case <-time.After(timeout):
-		break
-	}
-	return
-}
 func main() {
 	f, err := os.Create("currentsrv.prof")
 	if err != nil {
@@ -134,7 +142,7 @@ func main() {
 
 	props := property.Init()
 
-	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.events"])
+	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.stream"])
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}
@@ -142,8 +150,6 @@ func main() {
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
 	}
-	stateReader, stateUpdater := current.NewState()
-	go currentStateStore(evStore, stateReader, stateUpdater)
 	go processClientConnection(wsServer, evStore)
 	go wsServer.Listen()
 

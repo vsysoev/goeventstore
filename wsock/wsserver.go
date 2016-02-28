@@ -91,18 +91,6 @@ func (s *Server) Listen() {
 	for {
 		select {
 
-		// Add new a client
-		/*
-			case c := <-s.addCh:
-				log.Println("Added new client")
-				s.clients[c.id] = c
-				log.Println("Now", len(s.clients), "clients connected.")
-
-			// del a client
-			case c := <-s.delCh:
-				log.Println("Delete client")
-				delete(s.clients, c.id)
-		*/
 		case err := <-s.errCh:
 			log.Println("Error:", err.Error())
 

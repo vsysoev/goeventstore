@@ -20,9 +20,6 @@ const (
 	timeout = time.Millisecond * 10
 )
 
-// DOING:0 Move to Listenner2 and callback
-
-// TODO:0 Implementes messageHandler
 func messageHandler(ctx context.Context, msg []interface{}) {
 	log.Println("Msgs received")
 	toWS := ctx.Value("toWS").(chan *wsock.MessageT)
@@ -35,7 +32,6 @@ func messageHandler(ctx context.Context, msg []interface{}) {
 	log.Println("Msg sent")
 }
 
-// TODO:50 should be context.Context used to pass wsock.Client
 func clientHandler(c *wsock.Client, evStore *evstore.Connection) {
 	var (
 		err error
@@ -78,7 +74,6 @@ Loop:
 	log.Println("Exit clientProcessor")
 }
 
-// TODO:30 implement context creation for the server
 func processClientConnection(s *wsock.Server, evStore *evstore.Connection) {
 	log.Println("Enter processClientConnection")
 	addCh, delCh, doneCh, _ := s.GetChannels()
@@ -96,8 +91,6 @@ Loop:
 		case <-doneCh:
 			log.Println("doneCh got message")
 			break Loop
-			//		case <-time.After(timeout):
-			//			break
 		}
 	}
 	log.Println("processClientConnection exited")
