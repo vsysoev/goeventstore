@@ -42,6 +42,8 @@ func messageHandler(ctx context.Context, msgs []interface{}) {
 	sState = make(ScalarState)
 	log.Println("Msgs received")
 	toWS := ctx.Value("toWS").(chan *wsock.MessageT)
+	limit := 10
+	i := limit
 	for _, v := range msgs {
 		if v.(bson.M)["tag"] == "scalar" {
 			boxID := int(v.(bson.M)["event"].(bson.M)["box_id"].(float64))
@@ -50,6 +52,17 @@ func messageHandler(ctx context.Context, msgs []interface{}) {
 			sState[boxID] = make(map[int]*bson.M)
 			vV := v.(bson.M)
 			sState[boxID][varID] = &vV
+		}
+		i--
+		if i == 0 {
+			out := wsock.MessageT{}
+			out["state"] = sState.serialize2Slice()
+			log.Println(out)
+			toWS <- &out
+			log.Println("State sent")
+			sState = nil
+			sState = make(ScalarState)
+			i = 10
 		}
 	}
 	out := wsock.MessageT{}
