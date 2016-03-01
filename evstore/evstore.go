@@ -27,6 +27,7 @@ type (
 		triggerStream string
 		committer     *CommitterT
 		listenner     *ListennerT
+		manager       *ManageT
 	}
 	// CommitterT exports Committer interface
 	CommitterT struct {
@@ -40,6 +41,11 @@ type (
 		done   chan bool
 		wg     *sync.WaitGroup
 	}
+	// ManageT struct for Manage interface
+	ManageT struct {
+		p *Connection
+	}
+
 	// Committer interface defines method to commit new event to eventstore
 	Committer interface {
 		SubmitEvent(sequenceID string, tag string, eventJSON string) error
@@ -51,11 +57,19 @@ type (
 	}
 
 	// Handler type defines function which will be used as callback
-	Handler    func(ctx context.Context, event []interface{})
+	Handler func(ctx context.Context, event []interface{})
+	// Listenner2 interface is replacement of Listenner
+	// TODO: Remove Listenner interface and rename Listenner2 to Listenner
 	Listenner2 interface {
 		Subscribe2(eventTypes string, handlerFunc Handler) error
 		Unsubscribe2(eventTypes string)
 		Listen(ctx context.Context, id string) error
+	}
+	// Manage interface to support internal database functions
+	Manager interface {
+		//DropDatabase just drop database
+		//TODO: Remove after testing will be updated
+		DropDatabase(databaseName string) error
 	}
 )
 
@@ -75,8 +89,10 @@ func Dial(url string, dbName string, stream string) (*Connection, error) {
 	c.triggerStream = stream + "_capped"
 	c.committer = &CommitterT{}
 	c.listenner = &ListennerT{}
+	c.manager = &ManageT{}
 	c.listenner.p = &c
 	c.committer.p = &c
+	c.manager.p = &c
 	c.listenner.wg = &sync.WaitGroup{}
 	collections, err := c.session.DB(dbName).CollectionNames()
 	if err != nil {
@@ -337,4 +353,12 @@ func contains(col []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func (c *Connection) Manager() Manager {
+	return c.manager
+}
+
+func (m *ManageT) DropDatabase(databaseName string) error {
+	return m.p.session.DB(databaseName).DropDatabase()
 }

@@ -23,7 +23,7 @@ func cli(server string, msg string, timeOut int, wg *sync.WaitGroup) {
 	}
 
 	ws.SetReadDeadline(time.Now().Add(time.Second * time.Duration(timeOut)))
-	msgOut := make([]byte, 32757)
+	msgOut := make([]byte, 16384)
 	for {
 		n, err := ws.Read(msgOut)
 		log.Println("Read bytes:", n)
