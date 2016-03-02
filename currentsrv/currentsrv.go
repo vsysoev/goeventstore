@@ -40,14 +40,14 @@ func (s ScalarState) serialize2Slice() []*bson.M {
 func messageHandler(ctx context.Context, msgs []interface{}) {
 	var sState ScalarState
 	sState = make(ScalarState)
-	log.Println("Msgs received")
+	log.Println("Msgs received", msgs)
 	toWS := ctx.Value("toWS").(chan *wsock.MessageT)
 	limit := 10
 	i := limit
 	for _, v := range msgs {
 		if v.(bson.M)["tag"] == "scalar" {
-			boxID := int(v.(bson.M)["event"].(bson.M)["box_id"].(float64))
-			varID := int(v.(bson.M)["event"].(bson.M)["var_id"].(float64))
+			boxID := int(v.(bson.M)["event"].(bson.M)["box_id"].(int))
+			varID := int(v.(bson.M)["event"].(bson.M)["var_id"].(int))
 			if sState[boxID] == nil {
 				sState[boxID] = make(map[int]*bson.M)
 			}
