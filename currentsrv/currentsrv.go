@@ -1,12 +1,19 @@
 package main
 
+//DONE: Need one handler to support global state update. Implemented global ScalarState
+//  update single database readings
+//TODO: State may be requested by id or time
+//TODO: When you connect you get full state and next only updates until reconnect
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime/pprof"
+	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -24,95 +31,108 @@ const (
 )
 
 type (
-	ScalarState map[int]map[int]*bson.M
+	ScalarState struct {
+		state map[int]map[int]*bson.M
+		mx    sync.Mutex
+	}
 )
 
-func (s ScalarState) serialize2Slice() []*bson.M {
-	list := make([]*bson.M, 1)
-	for _, box := range s {
-		for _, val := range box {
-			list = append(list, val)
+var (
+	sState ScalarState
+)
+
+func (s ScalarState) serialize2Slice(id string) ([]*bson.M, error) {
+	var (
+		err error
+		nId uint64
+	)
+	if id != "" {
+		nId, err = strconv.ParseUint(id[len(id)-8:], 16, 32)
+		if err != nil {
+			return nil, err
 		}
 	}
-	return list
+	s.mx.Lock()
+	defer s.mx.Unlock()
+	list := make([]*bson.M, 1)
+	for _, box := range s.state {
+		for _, val := range box {
+			log.Println("ids", val, nId)
+			cId := (*val)["_id"].(bson.ObjectId).Hex()
+			curId, err := strconv.ParseUint(cId[len(cId)-8:], 16, 32)
+			if err != nil {
+				return nil, err
+			}
+			if curId > nId {
+				list = append(list, val)
+			}
+		}
+	}
+	return list, nil
 }
 
 func messageHandler(ctx context.Context, msgs []interface{}) {
-	var sState ScalarState
-	sState = make(ScalarState)
-	log.Println("Msgs received", msgs)
-	toWS := ctx.Value("toWS").(chan *wsock.MessageT)
-	limit := 10
-	i := limit
+	log.Println("Message recieved")
 	for _, v := range msgs {
 		if v.(bson.M)["tag"] == "scalar" {
+			sState.mx.Lock()
 			boxID := int(v.(bson.M)["event"].(bson.M)["box_id"].(int))
 			varID := int(v.(bson.M)["event"].(bson.M)["var_id"].(int))
-			if sState[boxID] == nil {
-				sState[boxID] = make(map[int]*bson.M)
+			if sState.state[boxID] == nil {
+				sState.state[boxID] = make(map[int]*bson.M)
 			}
 			vV := v.(bson.M)
-			sState[boxID][varID] = &vV
-		}
-		i--
-		if i == 0 {
-			out := wsock.MessageT{}
-			out["state"] = sState.serialize2Slice()
-			toWS <- &out
-			log.Println("State sent")
-			sState = nil
-			sState = make(ScalarState)
-			i = 10
+			sState.state[boxID][varID] = &vV
+			sState.mx.Unlock()
 		}
 	}
-	out := wsock.MessageT{}
-	out["state"] = sState.serialize2Slice()
-	log.Println(out)
-	toWS <- &out
-	log.Println("State sent")
+	log.Println(sState)
 }
 
+func sendStatusToClient(ctx context.Context, id string) {
+	var err error
+	_, toWS, doneCh := ctx.Value("client").(*wsock.Client).GetChannels()
+	go func() {
+		<-doneCh
+		ctx.Done()
+	}()
+	out := wsock.MessageT{}
+	for {
+		out["state"], err = sState.serialize2Slice(id)
+		if err != nil {
+			log.Println("Error serializing message", err)
+		}
+
+		toWS <- &out
+	}
+}
 func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
 	var (
-		evCh chan string
-		err  error
+		id string
+		ok bool
 	)
-	fromWS, toWS, doneCh := c.GetChannels()
+	fromWS, _, doneCh := c.GetChannels()
 	log.Println("Enter main loop serving client")
 Loop:
 	for {
 		select {
 		case <-doneCh:
 			log.Println("Client disconnected. Exit goroutine")
-			evStore.Listenner().Unsubscribe(evCh)
-			//doneCh <- true
 			break Loop
 		case msg := <-fromWS:
 			log.Println("Try to subscribe for ", msg)
-			if tag, ok := (*msg)["tag"].(string); ok {
-				err = evStore.Listenner2().Subscribe2(tag, messageHandler)
-				if err != nil {
-					log.Println("Can't subscribe to evStore", err)
-					return
-				}
-				ctx := context.WithValue(context.Background(), "toWS", toWS)
-				ctx, cancel := context.WithCancel(ctx)
-				defer cancel()
-				id := ""
-				if id, ok = (*msg)["id"].(string); ok {
-				}
-				go evStore.Listenner2().Listen(ctx, id)
+			ctx := context.WithValue(context.Background(), "client", c)
+			if id, ok = (*msg)["id"].(string); ok {
 			} else {
-				log.Println("Can't find tag in message", msg)
-				js := wsock.MessageT{}
-				js["response"] = "ERROR: No tag to subscribe"
-				toWS <- &js
+				id = ""
 			}
+			go sendStatusToClient(ctx, id)
 			break
 		}
 	}
 	log.Println("Exit clientProcessor")
 }
+
 func processClientConnection(s *wsock.Server, evStore *evstore.Connection) {
 	log.Println("Enter processClientConnection")
 	addCh, delCh, doneCh, _ := s.GetChannels()
@@ -140,6 +160,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	var id string
+	flag.StringVar(&id, "id", "", "ID to subscribe from")
+	flag.Parse()
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
 	c := make(chan os.Signal, 1)
@@ -163,6 +186,16 @@ func main() {
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
 	}
+	sState = ScalarState{}
+	sState.state = make(map[int]map[int]*bson.M)
+	err = evStore.Listenner2().Subscribe2("scalar", messageHandler)
+	if err != nil {
+		log.Fatalln("Error subscribing for changes", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go evStore.Listenner2().Listen(ctx, id)
+
 	go processClientConnection(wsServer, evStore)
 	go wsServer.Listen()
 

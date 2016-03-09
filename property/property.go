@@ -10,7 +10,7 @@ func Init() PropSet {
 	props := make(map[string]string)
 	props["mongodb.url"] = "mongodb://127.0.0.1"
 	props["mongodb.port"] = "27017"
-	props["mongodb.db"] = "test"
+	props["mongodb.db"] = "mt"
 	props["mongodb.stream"] = "events"
 	props["websocket.uri"] = "/ws"
 	props["websocket.url"] = ":8899"

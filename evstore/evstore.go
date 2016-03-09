@@ -323,7 +323,7 @@ func (e *ListennerT) processSubscription(ctx context.Context, filter string, id 
 		}
 	}()
 	for {
-		result, err := e.readEventsLimit(filter, id, 100)
+		result, err := e.readEventsLimit(filter, id, 1000)
 		if err != nil {
 			log.Println(err)
 			return
