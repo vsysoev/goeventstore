@@ -59,16 +59,17 @@ type (
 	// Handler type defines function which will be used as callback
 	Handler func(ctx context.Context, event []interface{})
 	// Listenner2 interface is replacement of Listenner
-	// TODO: Remove Listenner interface and rename Listenner2 to Listenner
+	// TODO:0 Remove Listenner interface and rename Listenner2 to Listenner
 	Listenner2 interface {
 		Subscribe2(eventTypes string, handlerFunc Handler) error
 		Unsubscribe2(eventTypes string)
+		GetLastId() string
 		Listen(ctx context.Context, id string) error
 	}
 	// Manage interface to support internal database functions
 	Manager interface {
 		//DropDatabase just drop database
-		//TODO: Remove after testing will be updated
+		//TODO:10 Remove after testing will be updated
 		DropDatabase(databaseName string) error
 	}
 )
@@ -277,6 +278,19 @@ func (e *ListennerT) Subscribe2(eventType string, handlerFunc Handler) error {
 
 func (e *ListennerT) Unsubscribe2(eventType string) {
 	return
+}
+
+func (e *ListennerT) GetLastId() string {
+	var result map[string]interface{}
+	iter := e.p.session.DB(e.p.dbName).C(e.p.stream).Find(nil).Sort("-$natural").Limit(1).Iter()
+	if iter == nil {
+		return ""
+	}
+	iter.Next(&result)
+	if result == nil {
+		return ""
+	}
+	return result["_id"].(bson.ObjectId).Hex()
 }
 
 // Listen start go routines which listen event in event stream and execute Handler

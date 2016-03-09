@@ -1,6 +1,6 @@
 //Package evstoreclient provides client to submit event to eventstore.
 //
-//TODO:0 Need to implement goroutine to read message back
+//DONE:10 Need to implement goroutine to read message back
 //FIXME(Vladimir): just empty bug
 package main
 

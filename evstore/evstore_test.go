@@ -185,6 +185,16 @@ func TestListen2Interface(t *testing.T) {
 		ev.Listenner2().Unsubscribe2("scalar")
 		ev.Close()
 	})
+	Convey("Check if LastId isn't empty string", t, func() {
+		ev, err := Dial(mongoURL, "mt", "events")
+		So(err, ShouldBeNil)
+		So(ev, ShouldNotBeNil)
+		So(err, ShouldBeNil)
+		id := ev.Listenner2().GetLastId()
+		So(id, ShouldNotEqual, "")
+		ev.Close()
+
+	})
 }
 func sampleHandler(ctx context.Context, events []interface{}) {
 	for _, event := range events {

@@ -1,9 +1,9 @@
 package main
 
-//DONE: Need one handler to support global state update. Implemented global ScalarState
+//DONE:20 Need one handler to support global state update. Implemented global ScalarState
 //  update single database readings
-//TODO: State may be requested by id or time
-//TODO: When you connect you get full state and next only updates until reconnect
+//TODO:20 State may be requested by id or time
+//TODO:30 When you connect you get full state and next only updates until reconnect
 import (
 	"flag"
 	"fmt"
@@ -32,8 +32,10 @@ const (
 
 type (
 	ScalarState struct {
-		state map[int]map[int]*bson.M
-		mx    sync.Mutex
+		state     map[int]map[int]*bson.M
+		mx        sync.Mutex
+		isCurrent bool
+		lastId    string
 	}
 )
 
@@ -41,15 +43,16 @@ var (
 	sState ScalarState
 )
 
-func (s ScalarState) serialize2Slice(id string) ([]*bson.M, error) {
+func (s ScalarState) serialize2Slice(id string) ([]*bson.M, error, string) {
 	var (
 		err error
 		nId uint64
+		cId string
 	)
 	if id != "" {
 		nId, err = strconv.ParseUint(id[len(id)-8:], 16, 32)
 		if err != nil {
-			return nil, err
+			return nil, err, ""
 		}
 	}
 	s.mx.Lock()
@@ -58,17 +61,17 @@ func (s ScalarState) serialize2Slice(id string) ([]*bson.M, error) {
 	for _, box := range s.state {
 		for _, val := range box {
 			log.Println("ids", val, nId)
-			cId := (*val)["_id"].(bson.ObjectId).Hex()
+			cId = (*val)["_id"].(bson.ObjectId).Hex()
 			curId, err := strconv.ParseUint(cId[len(cId)-8:], 16, 32)
 			if err != nil {
-				return nil, err
+				return nil, err, ""
 			}
 			if curId > nId {
 				list = append(list, val)
 			}
 		}
 	}
-	return list, nil
+	return list, nil, cId
 }
 
 func messageHandler(ctx context.Context, msgs []interface{}) {
@@ -84,6 +87,13 @@ func messageHandler(ctx context.Context, msgs []interface{}) {
 			vV := v.(bson.M)
 			sState.state[boxID][varID] = &vV
 			sState.mx.Unlock()
+			if !sState.isCurrent {
+				if sState.lastId == v.(bson.M)["_id"].(bson.ObjectId).Hex() {
+					sState.isCurrent = true
+				} else {
+					sState.lastId = v.(bson.M)["_id"].(bson.ObjectId).Hex()
+				}
+			}
 		}
 	}
 	log.Println(sState)
@@ -98,12 +108,15 @@ func sendStatusToClient(ctx context.Context, id string) {
 	}()
 	out := wsock.MessageT{}
 	for {
-		out["state"], err = sState.serialize2Slice(id)
-		if err != nil {
-			log.Println("Error serializing message", err)
-		}
+		if sState.isCurrent {
+			out["state"], err, id = sState.serialize2Slice(id)
+			if err != nil {
+				log.Println("Error serializing message", err)
+			}
 
-		toWS <- &out
+			toWS <- &out
+		}
+		<-time.After(time.Millisecond * 100)
 	}
 }
 func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
@@ -187,6 +200,7 @@ func main() {
 		log.Fatalln("Error creating new websocket server")
 	}
 	sState = ScalarState{}
+	sState.isCurrent = false
 	sState.state = make(map[int]map[int]*bson.M)
 	err = evStore.Listenner2().Subscribe2("scalar", messageHandler)
 	if err != nil {
@@ -194,6 +208,7 @@ func main() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	sState.lastId = evStore.Listenner2().GetLastId()
 	go evStore.Listenner2().Listen(ctx, id)
 
 	go processClientConnection(wsServer, evStore)
