@@ -1,9 +1,9 @@
 package main
 
-//DONE:20 Need one handler to support global state update. Implemented global ScalarState
-//  update single database readings
+//DONE:20 Need one handler to support global state update. Implemented global ScalarState update single database readings
 //TODO:20 State may be requested by id or time
-//TODO:30 When you connect you get full state and next only updates until reconnect
+//DOING:0 When you connect you get full state and next only updates until reconnect
+//TODO: Updates of state should be passed through pub/sub
 import (
 	"flag"
 	"fmt"
@@ -75,7 +75,6 @@ func (s ScalarState) serialize2Slice(id string) ([]*bson.M, error, string) {
 }
 
 func messageHandler(ctx context.Context, msgs []interface{}) {
-	log.Println("Message recieved")
 	for _, v := range msgs {
 		if v.(bson.M)["tag"] == "scalar" {
 			sState.mx.Lock()
@@ -90,13 +89,13 @@ func messageHandler(ctx context.Context, msgs []interface{}) {
 			if !sState.isCurrent {
 				if sState.lastId == v.(bson.M)["_id"].(bson.ObjectId).Hex() {
 					sState.isCurrent = true
-				} else {
-					sState.lastId = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 				}
+			} else {
+				sState.lastId = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 			}
 		}
 	}
-	log.Println(sState)
+	log.Println("State.lastId", sState.lastId)
 }
 
 func sendStatusToClient(ctx context.Context, id string) {
@@ -116,7 +115,7 @@ func sendStatusToClient(ctx context.Context, id string) {
 
 			toWS <- &out
 		}
-		<-time.After(time.Millisecond * 100)
+		<-time.After(time.Millisecond * 10)
 	}
 }
 func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
@@ -134,7 +133,9 @@ Loop:
 			break Loop
 		case msg := <-fromWS:
 			log.Println("Try to subscribe for ", msg)
-			ctx := context.WithValue(context.Background(), "client", c)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			ctx = context.WithValue(ctx, "client", c)
 			if id, ok = (*msg)["id"].(string); ok {
 			} else {
 				id = ""

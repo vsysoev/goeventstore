@@ -131,8 +131,11 @@ func (c *Client) listenRead() {
 				log.Println("Exit listenRead")
 				return
 			} else if err != nil {
-				log.Println("while parsing Error returned.")
+				//DONE: When client disconnected abnormally it should be dropped on server side
+				log.Println("error returned during parsing")
 				c.server.Err(err)
+				c.server.Del(c)
+				c.doneCh <- true
 			} else {
 				log.Println("Message recieved", msg)
 				c.fromWS <- &msg
