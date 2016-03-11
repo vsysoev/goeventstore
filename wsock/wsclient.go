@@ -131,7 +131,6 @@ func (c *Client) listenRead() {
 				log.Println("Exit listenRead")
 				return
 			} else if err != nil {
-				//DONE: When client disconnected abnormally it should be dropped on server side
 				log.Println("error returned during parsing")
 				c.server.Err(err)
 				c.server.Del(c)

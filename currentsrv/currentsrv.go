@@ -3,7 +3,7 @@ package main
 //DONE:20 Need one handler to support global state update. Implemented global ScalarState update single database readings
 //TODO:20 State may be requested by id or time
 //DOING:0 When you connect you get full state and next only updates until reconnect
-//TODO: Updates of state should be passed through pub/sub
+//DOING:10 Updates of state should be passed through pub/sub
 import (
 	"flag"
 	"fmt"
@@ -31,47 +31,56 @@ const (
 )
 
 type (
+	//ScalarState holds global current state
 	ScalarState struct {
 		state     map[int]map[int]*bson.M
-		mx        sync.Mutex
+		mx        *sync.Mutex
 		isCurrent bool
-		lastId    string
+		lastID    string
 	}
+	// ClientSlice define type for store clients connected
+	ClientSlice []*wsock.Client
 )
 
 var (
-	sState ScalarState
+	sState  ScalarState
+	clients ClientSlice
 )
 
-func (s ScalarState) serialize2Slice(id string) ([]*bson.M, error, string) {
+func (s ScalarState) serialize2Slice(id string) ([]*bson.M, string, error) {
 	var (
-		err error
-		nId uint64
-		cId string
+		err   error
+		nID   uint64
+		cID   string
+		maxID uint64
+		mID   string
+		list  []*bson.M
 	)
 	if id != "" {
-		nId, err = strconv.ParseUint(id[len(id)-8:], 16, 32)
+		nID, err = strconv.ParseUint(id[len(id)-8:], 16, 32)
 		if err != nil {
-			return nil, err, ""
+			return nil, "", err
 		}
 	}
 	s.mx.Lock()
 	defer s.mx.Unlock()
-	list := make([]*bson.M, 1)
 	for _, box := range s.state {
 		for _, val := range box {
-			log.Println("ids", val, nId)
-			cId = (*val)["_id"].(bson.ObjectId).Hex()
-			curId, err := strconv.ParseUint(cId[len(cId)-8:], 16, 32)
+			cID = (*val)["_id"].(bson.ObjectId).Hex()
+			curID, err := strconv.ParseUint(cID[len(cID)-8:], 16, 32)
 			if err != nil {
-				return nil, err, ""
+				return nil, "", err
 			}
-			if curId > nId {
+			if curID > nID {
 				list = append(list, val)
+			}
+			if maxID < curID {
+				maxID = curID
+				mID = cID
 			}
 		}
 	}
-	return list, nil, cId
+	return list, mID, nil
 }
 
 func messageHandler(ctx context.Context, msgs []interface{}) {
@@ -87,38 +96,49 @@ func messageHandler(ctx context.Context, msgs []interface{}) {
 			sState.state[boxID][varID] = &vV
 			sState.mx.Unlock()
 			if !sState.isCurrent {
-				if sState.lastId == v.(bson.M)["_id"].(bson.ObjectId).Hex() {
+				if sState.lastID == v.(bson.M)["_id"].(bson.ObjectId).Hex() {
 					sState.isCurrent = true
 				}
 			} else {
-				sState.lastId = v.(bson.M)["_id"].(bson.ObjectId).Hex()
+				sState.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 			}
+			ctx.Value("stateUpdateChannel").(chan *bson.M) <- &(vV)
 		}
 	}
-	log.Println("State.lastId", sState.lastId)
+	if sState.isCurrent {
+		fmt.Print("+")
+	} else {
+		fmt.Print("-")
+	}
 }
 
 func sendStatusToClient(ctx context.Context, id string) {
 	var err error
-	_, toWS, doneCh := ctx.Value("client").(*wsock.Client).GetChannels()
-	go func() {
-		<-doneCh
-		ctx.Done()
-	}()
+	_, toWS, _ := ctx.Value("client").(*wsock.Client).GetChannels()
+
 	out := wsock.MessageT{}
+Loop:
 	for {
 		if sState.isCurrent {
-			out["state"], err, id = sState.serialize2Slice(id)
+			out["state"], id, err = sState.serialize2Slice(id)
 			if err != nil {
 				log.Println("Error serializing message", err)
 			}
-
-			toWS <- &out
+			if len(out["state"].([]*bson.M)) > 0 {
+				log.Println("Message Len", len(out["state"].([]*bson.M)))
+				toWS <- &out
+			}
 		}
-		<-time.After(time.Millisecond * 10)
+		select {
+		case <-ctx.Done():
+			break Loop
+		case <-time.After(time.Millisecond * 10):
+			break
+		}
+		fmt.Print(".")
 	}
 }
-func clientProcessor(c *wsock.Client, evStore *evstore.Connection) {
+func clientProcessor(c *wsock.Client) {
 	var (
 		id string
 		ok bool
@@ -147,23 +167,54 @@ Loop:
 	log.Println("Exit clientProcessor")
 }
 
-func processClientConnection(s *wsock.Server, evStore *evstore.Connection) {
+func processClientConnection(ctx context.Context, s *wsock.Server) {
+	var clients ClientSlice
 	log.Println("Enter processClientConnection")
 	addCh, delCh, doneCh, _ := s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)
+
 Loop:
 	for {
 		select {
-		case cli := <-addCh:
-			log.Println("processClientConnection got add client notification", cli)
-			go clientProcessor(cli, evStore)
-			break
-		case cli := <-delCh:
-			log.Println("delCh go client", cli)
-			break
 		case <-doneCh:
 			log.Println("doneCh got message")
 			break Loop
+		case <-ctx.Done():
+			log.Println("Context destroyed")
+			break Loop
+		case cli := <-addCh:
+			log.Println("processClientConnection got add client notification", cli)
+			//			go clientProcessor(cli)
+			clients = append(clients, cli)
+			_, toWS, _ := cli.GetChannels()
+			if sState.isCurrent {
+				m := wsock.MessageT{}
+				l, _, err := sState.serialize2Slice("")
+				if err != nil {
+					log.Println("Error serializing message", err)
+				}
+				m["state"] = l
+				if len(m["state"].([]*bson.M)) > 0 {
+					toWS <- &m
+				}
+			}
+			break
+		case cli := <-delCh:
+			log.Println("delCh got client", cli)
+			for i, v := range clients {
+				if v == cli {
+					clients = append(clients[:i], clients[i+1:]...)
+					log.Println("Removed client", cli)
+				}
+			}
+			break
+		case msg := <-ctx.Value("stateUpdateChannel").(chan *bson.M):
+			out := wsock.MessageT{}
+			out["state"] = msg
+			for _, v := range clients {
+				_, toWS, _ := v.GetChannels()
+				toWS <- &out
+			}
 		}
 	}
 	log.Println("processClientConnection exited")
@@ -203,16 +254,19 @@ func main() {
 	sState = ScalarState{}
 	sState.isCurrent = false
 	sState.state = make(map[int]map[int]*bson.M)
+	sState.mx = new(sync.Mutex)
+	stateUpdateChannel := make(chan *bson.M, 256)
 	err = evStore.Listenner2().Subscribe2("scalar", messageHandler)
 	if err != nil {
 		log.Fatalln("Error subscribing for changes", err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx1, cancel := context.WithCancel(context.Background())
+	ctx := context.WithValue(ctx1, "stateUpdateChannel", stateUpdateChannel)
 	defer cancel()
-	sState.lastId = evStore.Listenner2().GetLastId()
+	sState.lastID = evStore.Listenner2().GetLastId()
 	go evStore.Listenner2().Listen(ctx, id)
 
-	go processClientConnection(wsServer, evStore)
+	go processClientConnection(ctx, wsServer)
 	go wsServer.Listen()
 
 	//http.Handle(props["static.url"], http.FileServer(http.Dir("webroot")))
