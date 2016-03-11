@@ -2,8 +2,8 @@ package main
 
 //DONE:20 Need one handler to support global state update. Implemented global ScalarState update single database readings
 //TODO:20 State may be requested by id or time
-//DOING:0 When you connect you get full state and next only updates until reconnect
-//DOING:10 Updates of state should be passed through pub/sub
+//DONE:30 When you connect you get full state and next only updates until reconnect
+//DONE:40 Updates of state should be passed through pub/sub
 import (
 	"flag"
 	"fmt"

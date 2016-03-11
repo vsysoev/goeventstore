@@ -345,7 +345,6 @@ func (e *ListennerT) processSubscription(ctx context.Context, filter string, id 
 		if len(result) > 0 {
 			handler(ctx, result)
 			id = result[len(result)-1].(bson.M)["_id"].(bson.ObjectId).Hex()
-			log.Println("Last id read", id)
 		}
 		select {
 		case <-ctx.Done():
