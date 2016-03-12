@@ -1,5 +1,6 @@
 package main
 
+//DOING:0 Cleanup deadcode after refactoring
 //DONE:20 Need one handler to support global state update. Implemented global ScalarState update single database readings
 //TODO:20 State may be requested by id or time
 //DONE:30 When you connect you get full state and next only updates until reconnect
@@ -110,61 +111,6 @@ func messageHandler(ctx context.Context, msgs []interface{}) {
 	} else {
 		fmt.Print("-")
 	}
-}
-
-func sendStatusToClient(ctx context.Context, id string) {
-	var err error
-	_, toWS, _ := ctx.Value("client").(*wsock.Client).GetChannels()
-
-	out := wsock.MessageT{}
-Loop:
-	for {
-		if sState.isCurrent {
-			out["state"], id, err = sState.serialize2Slice(id)
-			if err != nil {
-				log.Println("Error serializing message", err)
-			}
-			if len(out["state"].([]*bson.M)) > 0 {
-				log.Println("Message Len", len(out["state"].([]*bson.M)))
-				toWS <- &out
-			}
-		}
-		select {
-		case <-ctx.Done():
-			break Loop
-		case <-time.After(time.Millisecond * 10):
-			break
-		}
-		fmt.Print(".")
-	}
-}
-func clientProcessor(c *wsock.Client) {
-	var (
-		id string
-		ok bool
-	)
-	fromWS, _, doneCh := c.GetChannels()
-	log.Println("Enter main loop serving client")
-Loop:
-	for {
-		select {
-		case <-doneCh:
-			log.Println("Client disconnected. Exit goroutine")
-			break Loop
-		case msg := <-fromWS:
-			log.Println("Try to subscribe for ", msg)
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			ctx = context.WithValue(ctx, "client", c)
-			if id, ok = (*msg)["id"].(string); ok {
-			} else {
-				id = ""
-			}
-			go sendStatusToClient(ctx, id)
-			break
-		}
-	}
-	log.Println("Exit clientProcessor")
 }
 
 func processClientConnection(ctx context.Context, s *wsock.Server) {
