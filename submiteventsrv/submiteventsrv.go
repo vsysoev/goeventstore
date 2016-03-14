@@ -36,10 +36,11 @@ Loop:
 			break Loop
 		case cli := <-addCh:
 			log.Println("processClientConnection got add client notification", cli.Request().FormValue("id"))
-
+			clients.Append(cli)
 			break
 		case cli := <-delCh:
 			log.Println("delCh go client", cli)
+			clients.Delete(cli)
 			break
 		}
 	}
