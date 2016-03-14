@@ -16,6 +16,10 @@ import (
 	"github.com/vsysoev/goeventstore/wsock"
 )
 
+// Parameters passed in request:
+// id - id of start message
+// tag - name of tag to subscribe
+
 const (
 	timeout = time.Millisecond * 10
 )
@@ -32,13 +36,31 @@ func messageHandler(ctx context.Context, msg []interface{}) {
 	log.Println("Msg sent")
 }
 
-func clientHandler(c *wsock.Client, evStore *evstore.Connection) {
+func clientHandler(ctx context.Context, c *wsock.Client, evStore *evstore.Connection) {
 	var (
 		err error
 	)
 	//	state := make(ScalarState)
-	log.Println("clientProcessor Client connected. ", c)
-	fromWS, toWS, doneCh := c.GetChannels()
+	log.Println("clientProcessor Client connected. ", c.Request())
+	id := c.Request().FormValue("id")
+	tag := c.Request().FormValue("tag")
+	_, toWS, doneCh := c.GetChannels()
+	if tag != "" {
+		err = evStore.Listenner2().Subscribe2(tag, messageHandler)
+		if err != nil {
+			log.Println("Can't subscribe to evStore", err)
+			return
+		}
+		ctx2 := context.WithValue(ctx, "toWS", toWS)
+		ctx3, cancel := context.WithCancel(ctx2)
+		defer cancel()
+		go evStore.Listenner2().Listen(ctx3, id)
+	} else {
+		js := wsock.MessageT{}
+		js["response"] = "ERROR: No tag to subscribe"
+		toWS <- &js
+	}
+
 	log.Println("Enter main loop serving client")
 Loop:
 	for {
@@ -46,29 +68,6 @@ Loop:
 		case <-doneCh:
 			log.Println("Client disconnected. Exit goroutine")
 			break Loop
-		case msg := <-fromWS:
-			log.Println("Message recieved from WS", msg)
-			if tag, ok := (*msg)["tag"].(string); ok {
-				err = evStore.Listenner2().Subscribe2(tag, messageHandler)
-				if err != nil {
-					log.Println("Can't subscribe to evStore", err)
-					return
-				}
-				ctx := context.WithValue(context.Background(), "toWS", toWS)
-				ctx, cancel := context.WithCancel(ctx)
-				defer cancel()
-				id := ""
-				if id, ok = (*msg)["id"].(string); ok {
-				}
-				go evStore.Listenner2().Listen(ctx, id)
-			} else {
-				log.Println("Can't find tag in message", msg)
-				js := wsock.MessageT{}
-				js["response"] = "ERROR: No tag to subscribe"
-				toWS <- &js
-			}
-			break
-
 		}
 	}
 	log.Println("Exit clientProcessor")
@@ -82,8 +81,10 @@ Loop:
 	for {
 		select {
 		case cli := <-addCh:
-			log.Println("processClientConnection got add client notification", cli)
-			go clientHandler(cli, evStore)
+			log.Println("processClientConnection got add client notification", cli.Request().FormValue("id"))
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go clientHandler(ctx, cli, evStore)
 			break
 		case cli := <-delCh:
 			log.Println("delCh go client", cli)
@@ -119,7 +120,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}
-	wsServer := wsock.NewServer(props["websocket.uri"])
+	wsServer := wsock.NewServer(props["events.uri"])
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
 	}
@@ -127,6 +128,6 @@ func main() {
 	go wsServer.Listen()
 
 	//http.Handle(props["static.url"], http.FileServer(http.Dir("webroot")))
-	err = http.ListenAndServe(props["websocket.url"], nil)
+	err = http.ListenAndServe(props["events.url"], nil)
 	evStore.Close()
 }

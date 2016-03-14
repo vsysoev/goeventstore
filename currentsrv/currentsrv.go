@@ -1,10 +1,10 @@
 package main
 
-//DOING:0 Cleanup deadcode after refactoring
+//DONE:40 Cleanup deadcode after refactoring
 //DONE:20 Need one handler to support global state update. Implemented global ScalarState update single database readings
-//TODO:20 State may be requested by id or time
+//TODO:30 State may be requested by id or time
 //DONE:30 When you connect you get full state and next only updates until reconnect
-//DONE:40 Updates of state should be passed through pub/sub
+//DONE:50 Updates of state should be passed through pub/sub
 import (
 	"flag"
 	"fmt"
@@ -193,7 +193,7 @@ func main() {
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}
-	wsServer := wsock.NewServer(props["websocket.uri"])
+	wsServer := wsock.NewServer(props["current.uri"])
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
 	}
@@ -216,6 +216,6 @@ func main() {
 	go wsServer.Listen()
 
 	//http.Handle(props["static.url"], http.FileServer(http.Dir("webroot")))
-	err = http.ListenAndServe(props["websocket.url"], nil)
+	err = http.ListenAndServe(props["current.url"], nil)
 	evStore.Close()
 }

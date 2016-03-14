@@ -12,9 +12,13 @@ func Init() PropSet {
 	props["mongodb.port"] = "27017"
 	props["mongodb.db"] = "mt"
 	props["mongodb.stream"] = "events"
-	props["websocket.uri"] = "/ws"
-	props["websocket.url"] = ":8899"
+	props["current.uri"] = "/current"
+	props["current.url"] = ":8899"
+	props["events.uri"] = "/events"
+	props["events.url"] = ":8890"
 	props["static.url"] = "/"
+	props["pubevents.uri"] = "/events"
+	props["pubevents.url"] = ":8891"
 	return props
 }
 

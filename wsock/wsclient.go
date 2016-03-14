@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"time"
 
 	"golang.org/x/net/websocket"
@@ -58,6 +59,11 @@ func NewClient(ws *websocket.Conn, server *Server) *Client {
 func (c *Client) GetChannels() (chan *MessageT, chan *MessageT, chan bool) {
 	log.Println("In GetChannels")
 	return c.fromWS, c.toWS, c.doneCh
+}
+
+// Request returns HTTP request with parameters
+func (c *Client) Request() *http.Request {
+	return c.ws.Request()
 }
 
 // Conn return connection object

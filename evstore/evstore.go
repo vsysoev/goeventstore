@@ -59,7 +59,7 @@ type (
 	// Handler type defines function which will be used as callback
 	Handler func(ctx context.Context, event []interface{})
 	// Listenner2 interface is replacement of Listenner
-	// TODO:0 Remove Listenner interface and rename Listenner2 to Listenner
+	// TODO:10 Remove Listenner interface and rename Listenner2 to Listenner
 	Listenner2 interface {
 		Subscribe2(eventTypes string, handlerFunc Handler) error
 		Unsubscribe2(eventTypes string)
@@ -69,7 +69,7 @@ type (
 	// Manage interface to support internal database functions
 	Manager interface {
 		//DropDatabase just drop database
-		//TODO:10 Remove after testing will be updated
+		//TODO:20 Remove after testing will be updated
 		DropDatabase(databaseName string) error
 	}
 )
@@ -294,7 +294,6 @@ func (e *ListennerT) GetLastId() string {
 }
 
 // Listen start go routines which listen event in event stream and execute Handler
-// DONE:0 Handler should be executed with panic/recover
 func (e *ListennerT) Listen(ctx context.Context, id string) error {
 	if e.p.session == nil {
 		return errors.New("Mongo isn't connected. Please use Dial().")
