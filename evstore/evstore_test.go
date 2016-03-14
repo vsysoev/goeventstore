@@ -13,6 +13,7 @@ import (
 	"gopkg.in/mgo.v2"
 
 	. "github.com/smartystreets/goconvey/convey"
+	"github.com/vsysoev/goeventstore/property"
 )
 
 const mongoURL string = "mongodb://127.0.0.1"
@@ -21,6 +22,14 @@ type (
 	PositiveListenner struct{}
 )
 
+func dropTestDatabase(dbName string) error {
+	props := property.Init()
+	session, err := mgo.Dial(props["mongodb.url"])
+	if err != nil {
+		return err
+	}
+	return session.DB(dbName).DropDatabase()
+}
 func SkipTestJSONUnmarshalling(t *testing.T) {
 	Convey("Simple json unmarshalling", t, func() {
 		simpleJSON := "{\"name\":\"value\"}"
@@ -186,9 +195,11 @@ func TestListen2Interface(t *testing.T) {
 		ev.Close()
 	})
 	Convey("Check if LastId isn't empty string", t, func() {
-		ev, err := Dial(mongoURL, "mt", "events")
+		dropTestDatabase("test")
+		ev, err := Dial(mongoURL, "test", "events")
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
+		ev.Committer().SubmitEvent("", "fake", "{\"event\":\"fake\"}")
 		So(err, ShouldBeNil)
 		id := ev.Listenner2().GetLastId()
 		So(id, ShouldNotEqual, "")
