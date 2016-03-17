@@ -3,13 +3,37 @@ package main
 import (
 	"testing"
 
+	"golang.org/x/net/context"
+
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
+	"github.com/vsysoev/goeventstore/wsock"
 )
+
+type (
+	stubClient struct {
+		fromWS chan *wsock.MessageT
+		toWS   chan *wsock.MessageT
+		doneCh chan bool
+	}
+)
+
+func makeStubClient() Connector {
+	s := stubClient{}
+	s.fromWS = make(chan *wsock.MessageT, 128)
+	s.toWS = make(chan *wsock.MessageT, 128)
+	s.doneCh = make(chan bool, 128)
+	return &s
+}
+
+// GetChannels stub to return channels
+func (ws *stubClient) GetChannels() (chan *wsock.MessageT, chan *wsock.MessageT, chan bool) {
+	return ws.fromWS, ws.toWS, ws.doneCh
+}
 
 func TestDropDatabase(t *testing.T) {
 	Convey("Before start testing we drop database", t, func() {
@@ -22,15 +46,27 @@ func TestDropDatabase(t *testing.T) {
 	})
 }
 
+//DOING:0 This test should be rewritten to submit event through websocket.
 func TestSubmitEvent(t *testing.T) {
 	Convey("Submit simple event", t, func() {
-		var results []interface{}
+		var (
+			results []interface{}
+		)
 		props := property.Init()
 		ev, err := evstore.Dial(props["mongodb.url"], "test", "events")
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
-		err = ev.Committer().SubmitEvent("", "test", "{\"event\":\"fake\"}")
-		So(err, ShouldBeNil)
+		c := makeStubClient()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		fromWS, _, _ := c.GetChannels()
+		go handleClientRequest(ctx, c, ev)
+		//		<-time.After(500 * time.Millisecond)
+		m := wsock.MessageT{}
+		m["sequenceid"] = ""
+		m["tag"] = "test"
+		m["event"] = "{\"event\":\"fake\"}"
+		fromWS <- &m
 		session, err := mgo.Dial(props["mongodb.url"])
 		So(err, ShouldBeNil)
 		So(session, ShouldNotBeNil)

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -13,11 +14,30 @@ import (
 	"github.com/vsysoev/goeventstore/wsock"
 )
 
-var (
-	clients wsock.ClientPool
+type (
+	Connector wsock.Connector
 )
 
 // DOING:10 Events might be submitted through websocket
+func handleClientRequest(ctx context.Context, c Connector, e *evstore.Connection) {
+	fromWS, _, doneCh := c.GetChannels()
+Loop:
+	for {
+		select {
+		case <-ctx.Done():
+		case <-doneCh:
+			break Loop
+		case msg := <-fromWS:
+			e.Committer().SubmitEvent((*msg)["sequenceid"].(string),
+				(*msg)["tag"].(string),
+				(*msg)["event"].(string))
+			break
+		case <-time.After(time.Millisecond * 10):
+			break
+		}
+	}
+}
+
 // TODO:0 Events might be submitted through REST interface
 func processClientConnection(s *wsock.Server, evStore *evstore.Connection) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -36,11 +56,12 @@ Loop:
 			break Loop
 		case cli := <-addCh:
 			log.Println("processClientConnection got add client notification", cli.Request().FormValue("id"))
-			clients.Append(cli)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go handleClientRequest(ctx, cli, evStore)
 			break
 		case cli := <-delCh:
 			log.Println("delCh go client", cli)
-			clients.Delete(cli)
 			break
 		}
 	}

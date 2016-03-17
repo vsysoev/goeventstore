@@ -27,12 +27,13 @@ type (
 		toWS   chan *MessageT
 		doneCh chan bool
 	}
-	// MessageT defines message type
-	MessageT map[string]interface{}
-	// Producer defines interface for client production. Servers should
-	// implement this functions
+	// Producer interface define interface to client factory
 	Producer interface {
 		NewClient(ws *websocket.Conn, server *Server) *Client
+	}
+	// Connector interface defines communication interface
+	Connector interface {
+		GetChannels() (chan *MessageT, chan *MessageT, chan bool)
 	}
 )
 
@@ -59,6 +60,11 @@ func NewClient(ws *websocket.Conn, server *Server) *Client {
 func (c *Client) GetChannels() (chan *MessageT, chan *MessageT, chan bool) {
 	log.Println("In GetChannels")
 	return c.fromWS, c.toWS, c.doneCh
+}
+
+// Connector returns pointer to connector interface
+func (c *Client) Connector() Connector {
+	return c
 }
 
 // Request returns HTTP request with parameters
