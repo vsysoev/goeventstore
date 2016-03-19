@@ -18,7 +18,7 @@ type (
 	Connector wsock.Connector
 )
 
-// DOING:10 Events might be submitted through websocket
+// DONE:40 Events might be submitted through websocket
 func handleClientRequest(ctx context.Context, c Connector, e *evstore.Connection) {
 	fromWS, _, doneCh := c.GetChannels()
 Loop:

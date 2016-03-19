@@ -46,7 +46,7 @@ func TestDropDatabase(t *testing.T) {
 	})
 }
 
-//DOING:0 This test should be rewritten to submit event through websocket.
+//DONE:60 This test should be rewritten to submit event through websocket.
 func TestSubmitEvent(t *testing.T) {
 	Convey("Submit simple event", t, func() {
 		var (
