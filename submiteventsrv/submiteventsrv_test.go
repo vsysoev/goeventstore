@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -53,7 +54,7 @@ func TestSubmitEvent(t *testing.T) {
 			results []interface{}
 		)
 		props := property.Init()
-		ev, err := evstore.Dial(props["mongodb.url"], "test", "events")
+		ev, err := evstore.Dial(props["mongodb.url"], "test", props["mongodb.stream"])
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 		c := makeStubClient()
@@ -67,6 +68,7 @@ func TestSubmitEvent(t *testing.T) {
 		m["tag"] = "test"
 		m["event"] = "{\"event\":\"fake\"}"
 		fromWS <- &m
+		<-time.After(time.Millisecond * 100)
 		session, err := mgo.Dial(props["mongodb.url"])
 		So(err, ShouldBeNil)
 		So(session, ShouldNotBeNil)
