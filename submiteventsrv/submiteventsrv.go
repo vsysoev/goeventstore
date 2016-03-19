@@ -39,7 +39,7 @@ Loop:
 }
 
 // TODO:0 Events might be submitted through REST interface
-func processClientConnection(s *wsock.Server, evStore *evstore.Connection) {
+func processClientConnection(s *wsock.Server, props property.PropSet) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	log.Println("Enter processClientConnection")
@@ -56,8 +56,18 @@ Loop:
 			break Loop
 		case cli := <-addCh:
 			log.Println("processClientConnection got add client notification", cli.Request().FormValue("id"))
+			streamName := cli.Conn().Request().FormValue("stream")
+			if streamName == "" {
+				streamName = props["mongodb.stream"]
+			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
+			evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], streamName)
+			defer evStore.Close()
+			if err != nil {
+				log.Fatalln("Error connecting to event store. ", err)
+				return
+			}
 			go handleClientRequest(ctx, cli, evStore)
 			break
 		case cli := <-delCh:
@@ -72,18 +82,17 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	props := property.Init()
-	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.stream"])
-	if err != nil {
-		log.Fatalln("Error connecting to event store. ", err)
-	}
+	//DOING:0 evstore should be connected when user connected. Because in request should be defined stream to submit events.
 	wsServer := wsock.NewServer(props["submitevents.uri"])
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
 	}
-	go processClientConnection(wsServer, evStore)
+	go processClientConnection(wsServer, props)
 	go wsServer.Listen()
 
 	//http.Handle(props["static.url"], http.FileServer(http.Dir("webroot")))
-	err = http.ListenAndServe(props["submitevents.url"], nil)
-	evStore.Close()
+	err := http.ListenAndServe(props["submitevents.url"], nil)
+	if err != nil {
+		log.Fatalln("Error while ListenAndServer", err)
+	}
 }

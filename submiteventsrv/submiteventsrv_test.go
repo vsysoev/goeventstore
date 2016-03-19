@@ -54,7 +54,7 @@ func TestSubmitEvent(t *testing.T) {
 			results []interface{}
 		)
 		props := property.Init()
-		ev, err := evstore.Dial(props["mongodb.url"], "test", props["mongodb.stream"])
+		ev, err := evstore.Dial(props["mongodb.url"], "test", "submitevents")
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 		c := makeStubClient()
@@ -62,7 +62,6 @@ func TestSubmitEvent(t *testing.T) {
 		defer cancel()
 		fromWS, _, _ := c.GetChannels()
 		go handleClientRequest(ctx, c, ev)
-		//		<-time.After(500 * time.Millisecond)
 		m := wsock.MessageT{}
 		m["sequenceid"] = ""
 		m["tag"] = "test"
@@ -72,7 +71,7 @@ func TestSubmitEvent(t *testing.T) {
 		session, err := mgo.Dial(props["mongodb.url"])
 		So(err, ShouldBeNil)
 		So(session, ShouldNotBeNil)
-		iter := session.DB("test").C(props["mongodb.stream"]).Find(nil).Iter()
+		iter := session.DB("test").C("submitevents").Find(nil).Iter()
 		So(iter, ShouldNotBeNil)
 
 		iter.All(&results)
