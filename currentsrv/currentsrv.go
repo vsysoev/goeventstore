@@ -1,10 +1,10 @@
 package main
 
-//DONE:30 Cleanup deadcode after refactoring
-//DONE:10 Need one handler to support global state update. Implemented global ScalarState update single database readings
-//TODO:30 State may be requested by id or time
-//DONE:20 When you connect you get full state and next only updates until reconnect
-//DONE:70 Updates of state should be passed through pub/sub
+//DONE:50 Cleanup deadcode after refactoring
+//DONE:30 Need one handler to support global state update. Implemented global ScalarState update single database readings
+//TODO:20 State may be requested by id or time
+//DONE:40 When you connect you get full state and next only updates until reconnect
+//DONE:90 Updates of state should be passed through pub/sub
 import (
 	"flag"
 	"fmt"

@@ -19,10 +19,10 @@ type (
 	Connector wsock.Connector
 )
 
-// DONE:40 Events might be submitted through websocket
+// DONE:60 Events might be submitted through websocket
 func handleClientRequest(ctx context.Context, c Connector, e *evstore.Connection) {
 	var ev map[string]interface{}
-	fromWS, _, doneCh := c.GetChannels()
+	fromWS, toWS, doneCh := c.GetChannels()
 Loop:
 	for {
 		select {
@@ -30,6 +30,8 @@ Loop:
 		case <-doneCh:
 			break Loop
 		case msg := <-fromWS:
+			//DONE:0 Need message format check and report in case of failure
+			response := wsock.MessageT{"reply": "ok"}
 			seqid := ""
 			if val, ok := (*msg)["sequenceid"].(string); ok {
 				seqid = val
@@ -37,12 +39,24 @@ Loop:
 			tag := ""
 			if val, ok := (*msg)["tag"].(string); ok {
 				tag = val
+			} else {
+				response["reply"] = "ERROR"
+				response["msg"] = "No tag"
 			}
 			if val, ok := (*msg)["event"].(map[string]interface{}); ok {
 				ev = val
+			} else {
+				response["reply"] = "ERROR"
+				response["msg"] = "No event"
 			}
-			log.Println(seqid, tag, ev)
-			e.Committer().SubmitMapStringEvent(seqid, tag, ev)
+			if response["reply"] == "ok" {
+				err := e.Committer().SubmitMapStringEvent(seqid, tag, ev)
+				if err != nil {
+					response["reply"] = "ERROR"
+					response["msg"] = "Submit to eventstore failed"
+				}
+			}
+			toWS <- &response
 			break
 		case <-time.After(time.Millisecond * 10):
 			break
@@ -101,7 +115,7 @@ func main() {
 		}
 	}()
 	props := property.Init()
-	//DOING:0 evstore should be connected when user connected. Because in request should be defined stream to submit events.
+	//DONE:10 evstore should be connected when user connected. Because in request should be defined stream to submit events.
 	wsServer := wsock.NewServer(props["submitevents.uri"])
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
