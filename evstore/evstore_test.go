@@ -28,12 +28,9 @@ func dropTestDatabase(dbName string) error {
 	if err != nil {
 		return err
 	}
-	err = session.DB(dbName).C("events_capped").DropCollection()
-	if err != nil {
-		return err
-	}
-	return session.DB(dbName).C("events").DropCollection()
-
+	_ = session.DB(dbName).C("events_capped").DropCollection()
+	_ = session.DB(dbName).C("events").DropCollection()
+	return nil
 }
 func SkipTestJSONUnmarshalling(t *testing.T) {
 	Convey("Simple json unmarshalling", t, func() {

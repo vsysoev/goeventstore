@@ -30,10 +30,8 @@ func TestDropDatabase(t *testing.T) {
 		session, err := mgo.Dial(props["mongodb.url"])
 		So(session, ShouldNotBeNil)
 		So(err, ShouldBeNil)
-		err = session.DB("test").C("events_capped").DropCollection()
-		So(err, ShouldBeNil)
-		err = session.DB("test").C("events").DropCollection()
-		So(err, ShouldBeNil)
+		_ = session.DB("test").C("events_capped").DropCollection()
+		_ = session.DB("test").C("events").DropCollection()
 	})
 }
 func TestCurrentScalarState(t *testing.T) {
