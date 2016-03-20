@@ -36,15 +36,13 @@ func (ws *stubClient) GetChannels() (chan *wsock.MessageT, chan *wsock.MessageT,
 	return ws.fromWS, ws.toWS, ws.doneCh
 }
 
-func TestDropDatabase(t *testing.T) {
+func TestDropCollections(t *testing.T) {
 	Convey("Before start testing we cleanup collections", t, func() {
 		props := property.Init()
 		session, err := mgo.Dial(props["mongodb.url"])
 		So(err, ShouldBeNil)
-		err = session.DB("test").C("submitevents").DropCollection()
-		So(err, ShouldBeNil)
-		err = session.DB("test").C("submitevents_capped").DropCollection()
-		So(err, ShouldBeNil)
+		_ = session.DB("test").C("submitevents").DropCollection()
+		_ = session.DB("test").C("submitevents_capped").DropCollection()
 
 	})
 }
