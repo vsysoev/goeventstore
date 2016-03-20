@@ -8,10 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/mgo.v2"
+
 	"golang.org/x/net/context"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/vsysoev/goeventstore/evstore"
+	"github.com/vsysoev/goeventstore/property"
 )
 
 const (
@@ -23,9 +26,14 @@ func Handler(ctx context.Context, msgs []interface{}) {
 }
 func TestDropDatabase(t *testing.T) {
 	Convey("Before start testing we drop database", t, func() {
-		ev, err := evstore.Dial(mongoURL, "test", "events")
+		props := property.Init()
+		session, err := mgo.Dial(props["mongodb.url"])
+		So(session, ShouldNotBeNil)
 		So(err, ShouldBeNil)
-		ev.Manager().DropDatabase("test")
+		err = session.DB("test").C("events_capped").DropCollection()
+		So(err, ShouldBeNil)
+		err = session.DB("test").C("events").DropCollection()
+		So(err, ShouldBeNil)
 	})
 }
 func TestCurrentScalarState(t *testing.T) {

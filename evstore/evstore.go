@@ -66,12 +66,6 @@ type (
 		GetLastId() string
 		Listen(ctx context.Context, id string) error
 	}
-	// Manage interface to support internal database functions
-	Manager interface {
-		//DropDatabase just drop database
-		//TODO:20 Remove after testing will be updated
-		DropDatabase(databaseName string) error
-	}
 )
 
 // Dial fabric function to produce new connection to eventstore
@@ -354,8 +348,6 @@ func (e *ListennerT) processSubscription(ctx context.Context, filter string, id 
 		}
 
 	}
-	log.Println("Exit processSubscription")
-	return
 }
 
 func contains(col []string, target string) bool {
@@ -365,12 +357,4 @@ func contains(col []string, target string) bool {
 		}
 	}
 	return false
-}
-
-func (c *Connection) Manager() Manager {
-	return c.manager
-}
-
-func (m *ManageT) DropDatabase(databaseName string) error {
-	return m.p.session.DB(databaseName).DropDatabase()
 }
