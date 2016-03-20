@@ -17,8 +17,8 @@ func Init() PropSet {
 	props["events.uri"] = "/events"
 	props["events.url"] = ":8890"
 	props["static.url"] = "/"
-	props["pubevents.uri"] = "/events"
-	props["pubevents.url"] = ":8891"
+	props["submitevents.uri"] = "/events"
+	props["submitevents.url"] = ":8891"
 	return props
 }
 

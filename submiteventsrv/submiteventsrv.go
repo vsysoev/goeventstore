@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/context"
@@ -20,6 +21,7 @@ type (
 
 // DONE:40 Events might be submitted through websocket
 func handleClientRequest(ctx context.Context, c Connector, e *evstore.Connection) {
+	var ev map[string]interface{}
 	fromWS, _, doneCh := c.GetChannels()
 Loop:
 	for {
@@ -28,9 +30,19 @@ Loop:
 		case <-doneCh:
 			break Loop
 		case msg := <-fromWS:
-			e.Committer().SubmitEvent((*msg)["sequenceid"].(string),
-				(*msg)["tag"].(string),
-				(*msg)["event"].(string))
+			seqid := ""
+			if val, ok := (*msg)["sequenceid"].(string); ok {
+				seqid = val
+			}
+			tag := ""
+			if val, ok := (*msg)["tag"].(string); ok {
+				tag = val
+			}
+			if val, ok := (*msg)["event"].(map[string]interface{}); ok {
+				ev = val
+			}
+			log.Println(seqid, tag, ev)
+			e.Committer().SubmitMapStringEvent(seqid, tag, ev)
 			break
 		case <-time.After(time.Millisecond * 10):
 			break
@@ -62,6 +74,7 @@ Loop:
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
+			log.Println("Stream name", streamName)
 			evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], streamName)
 			defer evStore.Close()
 			if err != nil {
@@ -81,6 +94,12 @@ Loop:
 func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
+	go func() {
+		select {
+		case <-c:
+			syscall.Exit(0)
+		}
+	}()
 	props := property.Init()
 	//DOING:0 evstore should be connected when user connected. Because in request should be defined stream to submit events.
 	wsServer := wsock.NewServer(props["submitevents.uri"])

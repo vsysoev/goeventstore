@@ -49,6 +49,7 @@ type (
 	// Committer interface defines method to commit new event to eventstore
 	Committer interface {
 		SubmitEvent(sequenceID string, tag string, eventJSON string) error
+		SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error
 	}
 	// Listenner interface defines method to listen events from the datastore
 	Listenner interface {
@@ -131,6 +132,24 @@ func (c *CommitterT) SubmitEvent(sequenceID string, tag string, eventJSON string
 	event["tag"] = tag
 	event["event"] = object
 	err = c.p.session.DB(c.p.dbName).C(c.p.stream).Insert(event)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	err = c.p.session.DB(c.p.dbName).C(c.p.triggerStream).Insert(bson.M{"trigger": 1})
+	if err != nil {
+		log.Println(err)
+	}
+	return err
+}
+
+// SubmitEvent submittes event to event store
+func (c *CommitterT) SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error {
+	event := make(map[string]interface{})
+	event["sequenceID"] = sequenceID
+	event["tag"] = tag
+	event["event"] = body
+	err := c.p.session.DB(c.p.dbName).C(c.p.stream).Insert(event)
 	if err != nil {
 		log.Println(err)
 		return err
