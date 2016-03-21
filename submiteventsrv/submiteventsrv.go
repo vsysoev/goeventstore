@@ -21,7 +21,6 @@ type (
 	Connector wsock.Connector
 )
 
-// DONE:60 Events might be submitted through websocket
 func handleClientRequest(ctx context.Context, c Connector, e *evstore.Connection) {
 	var ev map[string]interface{}
 	fromWS, toWS, doneCh := c.GetChannels()
@@ -32,7 +31,6 @@ Loop:
 		case <-doneCh:
 			break Loop
 		case msg := <-fromWS:
-			//DONE:0 Need message format check and report in case of failure
 			response := wsock.MessageT{"reply": "ok"}
 			seqid := ""
 			if val, ok := (*msg)["sequenceid"].(string); ok {
@@ -66,7 +64,6 @@ Loop:
 	}
 }
 
-// DOING:0 Events might be submitted through REST interface
 func processClientConnection(s *wsock.Server, props property.PropSet) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -169,7 +166,6 @@ func main() {
 		}
 	}()
 	props := property.Init()
-	//DONE:10 evstore should be connected when user connected. Because in request should be defined stream to submit events.
 	wsServer := wsock.NewServer(props["submitevents.uri"])
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
@@ -177,7 +173,8 @@ func main() {
 	go processClientConnection(wsServer, props)
 	go wsServer.Listen()
 	http.HandleFunc(props["postevents.uri"], handlePostRequest)
-	err := http.ListenAndServe(props["submitevents.url"], nil)
+	go http.ListenAndServe(props["submitevents.url"], nil)
+	err := http.ListenAndServeTLS(props["securepostevents.url"], "server.pem", "server.key", nil)
 	if err != nil {
 		log.Fatalln("Error while ListenAndServer", err)
 	}
