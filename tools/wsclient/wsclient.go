@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"flag"
 	"io"
 	"log"
@@ -24,8 +25,18 @@ type (
 
 func cli(args CommandLineArguments, wg *sync.WaitGroup) {
 	defer wg.Done()
-	origin := "http://localhost"
-	ws, err := websocket.Dial(args.server, "", origin)
+	cfg, err := websocket.NewConfig(args.server, "wss://localhost")
+	if err != nil {
+		panic(err)
+	}
+	cert, err := tls.LoadX509KeyPair("server.pem", "server.key")
+	if err != nil {
+		panic(err)
+	}
+	config := tls.Config{Certificates: []tls.Certificate{cert}}
+	config.InsecureSkipVerify = true
+	cfg.TlsConfig = &config
+	ws, err := websocket.DialConfig(cfg)
 	if err != nil {
 		panic(err)
 	}

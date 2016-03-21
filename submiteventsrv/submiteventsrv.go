@@ -17,6 +17,9 @@ import (
 	"github.com/vsysoev/goeventstore/wsock"
 )
 
+//TODO: Implement ONLY HTTPS post of events
+//TODO: Implements baseauth authorization
+
 type (
 	Connector wsock.Connector
 )
