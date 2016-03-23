@@ -2,7 +2,7 @@ package main
 
 //DONE:60 Cleanup deadcode after refactoring
 //DONE:40 Need one handler to support global state update. Implemented global ScalarState update single database readings
-//TODO:10 State may be requested by id or time
+//TODO:20 State may be requested by id or time
 //DONE:50 When you connect you get full state and next only updates until reconnect
 //DONE:100 Updates of state should be passed through pub/sub
 import (
