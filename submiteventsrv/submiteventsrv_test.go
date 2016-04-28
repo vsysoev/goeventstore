@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -35,25 +36,23 @@ func (ws *stubClient) GetChannels() (chan *wsock.MessageT, chan *wsock.MessageT,
 	return ws.fromWS, ws.toWS, ws.doneCh
 }
 
-func TestDropDatabase(t *testing.T) {
-	Convey("Before start testing we drop database", t, func() {
-		props := property.Init()
-		session, err := mgo.Dial(props["mongodb.url"])
-		So(err, ShouldBeNil)
-		err = session.DB("test").DropDatabase()
-		So(err, ShouldBeNil)
+func CleanupCollections() {
 
-	})
+	props := property.Init()
+	session, _ := mgo.Dial(props["mongodb.url"])
+	_ = session.DB("test").C("submitevents").DropCollection()
+	_ = session.DB("test").C("submitevents_capped").DropCollection()
 }
 
-//DONE:60 This test should be rewritten to submit event through websocket.
+//DONE:80 This test should be rewritten to submit event through websocket.
 func TestSubmitEvent(t *testing.T) {
 	Convey("Submit simple event", t, func() {
 		var (
 			results []interface{}
 		)
 		props := property.Init()
-		ev, err := evstore.Dial(props["mongodb.url"], "test", "events")
+		CleanupCollections()
+		ev, err := evstore.Dial(props["mongodb.url"], "test", "submitevents")
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 		c := makeStubClient()
@@ -61,16 +60,17 @@ func TestSubmitEvent(t *testing.T) {
 		defer cancel()
 		fromWS, _, _ := c.GetChannels()
 		go handleClientRequest(ctx, c, ev)
-		//		<-time.After(500 * time.Millisecond)
 		m := wsock.MessageT{}
 		m["sequenceid"] = ""
 		m["tag"] = "test"
-		m["event"] = "{\"event\":\"fake\"}"
+		m["event"] = map[string]interface{}{"event": "fake"}
 		fromWS <- &m
+		<-time.After(time.Millisecond * 100)
 		session, err := mgo.Dial(props["mongodb.url"])
+		defer session.Close()
 		So(err, ShouldBeNil)
 		So(session, ShouldNotBeNil)
-		iter := session.DB("test").C(props["mongodb.stream"]).Find(nil).Iter()
+		iter := session.DB("test").C("submitevents").Find(nil).Iter()
 		So(iter, ShouldNotBeNil)
 
 		iter.All(&results)
@@ -78,5 +78,71 @@ func TestSubmitEvent(t *testing.T) {
 		for _, v := range results {
 			So(v.(bson.M)["event"].(bson.M)["event"], ShouldEqual, "fake")
 		}
+	})
+}
+func TestSubmitErrorEvent(t *testing.T) {
+	Convey("Submit event with no tag", t, func() {
+		var (
+			results []interface{}
+		)
+		props := property.Init()
+		CleanupCollections()
+		ev, err := evstore.Dial(props["mongodb.url"], "test", "submitevents")
+		So(err, ShouldBeNil)
+		So(ev, ShouldNotBeNil)
+		c := makeStubClient()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		fromWS, toWS, _ := c.GetChannels()
+		go handleClientRequest(ctx, c, ev)
+		m := wsock.MessageT{}
+		m["sequenceid"] = ""
+		m["event"] = map[string]interface{}{"event": "no tag"}
+		fromWS <- &m
+		<-time.After(time.Millisecond * 100)
+		msg := <-toWS
+		So((*msg)["reply"].(string), ShouldEqual, "ERROR")
+		So((*msg)["msg"].(string), ShouldEqual, "No tag")
+		session, err := mgo.Dial(props["mongodb.url"])
+		So(err, ShouldBeNil)
+		So(session, ShouldNotBeNil)
+		defer session.Close()
+		iter := session.DB("test").C("submitevents").Find(nil).Iter()
+		So(iter, ShouldNotBeNil)
+		iter.All(&results)
+		So(results, ShouldBeNil)
+
+	})
+	Convey("Submit event with no event", t, func() {
+		var (
+			results []interface{}
+		)
+		props := property.Init()
+		CleanupCollections()
+		ev, err := evstore.Dial(props["mongodb.url"], "test", "submitevents")
+		So(err, ShouldBeNil)
+		So(ev, ShouldNotBeNil)
+		c := makeStubClient()
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		fromWS, toWS, _ := c.GetChannels()
+		go handleClientRequest(ctx, c, ev)
+		m := wsock.MessageT{}
+		m["sequenceid"] = ""
+		m["tag"] = "test"
+		fromWS <- &m
+		<-time.After(time.Millisecond * 100)
+		msg := <-toWS
+		So((*msg)["reply"].(string), ShouldEqual, "ERROR")
+		So((*msg)["msg"].(string), ShouldEqual, "No event")
+		session, err := mgo.Dial(props["mongodb.url"])
+		So(err, ShouldBeNil)
+		So(session, ShouldNotBeNil)
+		defer session.Close()
+		iter := session.DB("test").C("submitevents").Find(nil).Iter()
+		So(iter, ShouldNotBeNil)
+		iter.All(&results)
+		So(results, ShouldBeNil)
+
 	})
 }

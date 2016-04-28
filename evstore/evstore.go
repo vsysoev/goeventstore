@@ -55,6 +55,7 @@ type (
 	// Committer interface defines method to commit new event to eventstore
 	Committer interface {
 		SubmitEvent(sequenceID string, tag string, eventJSON string) error
+		SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error
 	}
 	// Listenner interface defines method to listen events from the datastore
 	Listenner interface {
@@ -65,7 +66,7 @@ type (
 	// Handler type defines function which will be used as callback
 	Handler func(ctx context.Context, event []interface{})
 	// Listenner2 interface is replacement of Listenner
-	// TODO:10 Remove Listenner interface and rename Listenner2 to Listenner
+	// TODO:0 Remove Listenner interface and rename Listenner2 to Listenner
 	Listenner2 interface {
 		Subscribe2(eventTypes string, handlerFunc Handler) error
 		Unsubscribe2(eventTypes string)
@@ -151,6 +152,24 @@ func (c *CommitterT) SubmitEvent(sequenceID string, tag string, eventJSON string
 	event["tag"] = tag
 	event["event"] = object
 	err = c.c.session.DB(c.c.dbName).C(c.c.stream).Insert(event)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	err = c.c.session.DB(c.c.dbName).C(c.c.triggerStream).Insert(bson.M{"trigger": 1})
+	if err != nil {
+		log.Println(err)
+	}
+	return err
+}
+
+// SubmitMapStringEvent submittes event to event store
+func (c *CommitterT) SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error {
+	event := make(map[string]interface{})
+	event["sequenceID"] = sequenceID
+	event["tag"] = tag
+	event["event"] = body
+	err := c.c.session.DB(c.c.dbName).C(c.c.stream).Insert(event)
 	if err != nil {
 		log.Println(err)
 		return err
