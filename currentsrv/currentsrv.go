@@ -6,16 +6,13 @@ package main
 //DONE:20 When you connect you get full state and next only updates until reconnect
 //DONE:70 Updates of state should be passed through pub/sub
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"runtime/pprof"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"gopkg.in/mgo.v2/bson"
@@ -34,18 +31,25 @@ const (
 type (
 	//ScalarState holds global current state
 	ScalarState struct {
-		state     map[int]map[int]*bson.M
-		mx        *sync.Mutex
-		isCurrent bool
-		lastID    string
+		state  map[int]map[int]*bson.M
+		mx     *sync.Mutex
+		lastID string
 	}
 	// ClientSlice define type for store clients connected
 	ClientSlice []*wsock.Client
+	// Config struct stores current system configuration
+	Config struct {
+		config string
+		lastID string
+		mx     *sync.Mutex
+	}
 )
 
 var (
-	sState  ScalarState
-	clients ClientSlice
+	sState        ScalarState
+	clients       ClientSlice
+	currentConfig Config
+	isCurrent     bool
 )
 
 func (s ScalarState) serialize2Slice(id string) ([]*bson.M, string, error) {
@@ -84,9 +88,10 @@ func (s ScalarState) serialize2Slice(id string) ([]*bson.M, string, error) {
 	return list, mID, nil
 }
 
-func messageHandler(ctx context.Context, msgs []interface{}) {
+func scalarHandler(ctx context.Context, msgs []interface{}) {
 	for _, v := range msgs {
-		if v.(bson.M)["tag"] == "scalar" {
+		switch v.(bson.M)["tag"] {
+		case "scalar":
 			sState.mx.Lock()
 			boxID := int(v.(bson.M)["event"].(bson.M)["box_id"].(int))
 			varID := int(v.(bson.M)["event"].(bson.M)["var_id"].(int))
@@ -96,26 +101,56 @@ func messageHandler(ctx context.Context, msgs []interface{}) {
 			vV := v.(bson.M)
 			sState.state[boxID][varID] = &vV
 			sState.mx.Unlock()
-			if !sState.isCurrent {
+			if !isCurrent {
 				if sState.lastID == v.(bson.M)["_id"].(bson.ObjectId).Hex() {
-					sState.isCurrent = true
+					isCurrent = true
 				}
 			} else {
 				sState.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 			}
 			ctx.Value("stateUpdateChannel").(chan *bson.M) <- &(vV)
+			break
 		}
 	}
-	if sState.isCurrent {
+	if isCurrent {
 		fmt.Print("+")
 	} else {
 		fmt.Print("-")
 	}
 }
 
+func configHandler(ctx context.Context, msgs []interface{}) {
+	for _, v := range msgs {
+		switch v.(bson.M)["tag"] {
+		case "config":
+			currentConfig.mx.Lock()
+			s, err := json.Marshal(v.(bson.M))
+			if err != nil {
+				log.Println("ERROR reading config from repository.", err.Error())
+			}
+			currentConfig.config = string(s)
+			currentConfig.mx.Unlock()
+			if !isCurrent {
+				if currentConfig.lastID == v.(bson.M)["_id"].(bson.ObjectId).Hex() {
+					isCurrent = true
+
+				}
+			} else {
+				currentConfig.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
+			}
+			log.Println("Configuration changed.", string(s))
+			break
+		}
+	}
+	if isCurrent {
+		fmt.Print("*")
+	} else {
+		fmt.Print(".")
+	}
+}
+
 func processClientConnection(ctx context.Context, s *wsock.Server) {
 	var clients ClientSlice
-	log.Println("Enter processClientConnection")
 	addCh, delCh, doneCh, _ := s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)
 
@@ -133,7 +168,10 @@ Loop:
 			//			go clientProcessor(cli)
 			clients = append(clients, cli)
 			_, toWS, _ := cli.GetChannels()
-			if sState.isCurrent {
+			if isCurrent {
+				c := wsock.MessageT{}
+				c["config"] = currentConfig.config
+				toWS <- &c
 				m := wsock.MessageT{}
 				l, _, err := sState.serialize2Slice("")
 				if err != nil {
@@ -167,26 +205,9 @@ Loop:
 }
 
 func main() {
-	f, err := os.Create("currentsrv.prof")
-	if err != nil {
-		log.Fatal(err)
-	}
 	var id string
 	flag.StringVar(&id, "id", "", "ID to subscribe from")
 	flag.Parse()
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		select {
-		case <-c:
-			fmt.Println("Stop profiling")
-			pprof.StopCPUProfile()
-			syscall.Exit(0)
-		}
-	}()
-
 	props := property.Init()
 
 	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.stream"])
@@ -198,18 +219,25 @@ func main() {
 		log.Fatalln("Error creating new websocket server")
 	}
 	sState = ScalarState{}
-	sState.isCurrent = false
 	sState.state = make(map[int]map[int]*bson.M)
-	sState.mx = new(sync.Mutex)
+	sState.mx = &sync.Mutex{}
+	currentConfig = Config{}
+	currentConfig.mx = &sync.Mutex{}
+	isCurrent = false
 	stateUpdateChannel := make(chan *bson.M, 256)
-	err = evStore.Listenner2().Subscribe2("scalar", messageHandler)
+	err = evStore.Listenner2().Subscribe2("scalar", scalarHandler)
 	if err != nil {
 		log.Fatalln("Error subscribing for changes", err)
+	}
+	err = evStore.Listenner2().Subscribe2("config", configHandler)
+	if err != nil {
+		log.Fatalln("Error subscribing for config changes", err)
 	}
 	ctx1, cancel := context.WithCancel(context.Background())
 	ctx := context.WithValue(ctx1, "stateUpdateChannel", stateUpdateChannel)
 	defer cancel()
-	sState.lastID = evStore.Listenner2().GetLastId()
+	sState.lastID = evStore.Listenner2().GetLastID()
+	log.Println("Before Listen call")
 	go evStore.Listenner2().Listen(ctx, id)
 
 	go processClientConnection(ctx, wsServer)

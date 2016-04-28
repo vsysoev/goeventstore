@@ -117,6 +117,7 @@ func (c *Client) listenWrite() {
 			break
 		// receive done request
 		case <-time.After(timeout):
+			break
 		}
 	}
 }
