@@ -21,6 +21,8 @@ func Init() PropSet {
 	props["pubevents.url"] = ":8891"
 	props["rpceventsrv.uri"] = "/rpc"
 	props["rpceventsrv.url"] = ":8892"
+	props["configsrv.uri"] = "/config"
+	props["configsrv.url"] = ":8893"
 	return props
 }
 

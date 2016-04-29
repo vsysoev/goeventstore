@@ -1,16 +1,11 @@
 package main
 
-//DONE:50 Cleanup deadcode after refactoring
-//DONE:30 Need one handler to support global state update. Implemented global ScalarState update single database readings
-//TODO:10 State may be requested by id or time
-//DONE:40 When you connect you get full state and next only updates until reconnect
-//DONE:90 Updates of state should be passed through pub/sub
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"sync"
 	"time"
 
@@ -28,86 +23,49 @@ const (
 )
 
 type (
-	//ScalarState holds global current state
-	ScalarState struct {
-		state  map[int]map[int]*bson.M
-		mx     *sync.Mutex
-		lastID string
-	}
 	// ClientSlice define type for store clients connected
 	ClientSlice []*wsock.Client
+	// Config struct stores current system configuration
+	Config struct {
+		config string
+		lastID string
+		mx     *sync.Mutex
+	}
 )
 
 var (
-	sState    ScalarState
-	clients   ClientSlice
-	isCurrent bool
+	clients       ClientSlice
+	currentConfig Config
+	isCurrent     bool
 )
 
-func (s ScalarState) serialize2Slice(id string) ([]*bson.M, string, error) {
-	var (
-		err   error
-		nID   uint64
-		cID   string
-		maxID uint64
-		mID   string
-		list  []*bson.M
-	)
-	if id != "" {
-		nID, err = strconv.ParseUint(id[len(id)-8:], 16, 32)
-		if err != nil {
-			return nil, "", err
-		}
-	}
-	s.mx.Lock()
-	defer s.mx.Unlock()
-	for _, box := range s.state {
-		for _, val := range box {
-			cID = (*val)["_id"].(bson.ObjectId).Hex()
-			curID, err := strconv.ParseUint(cID[len(cID)-8:], 16, 32)
-			if err != nil {
-				return nil, "", err
-			}
-			if curID > nID {
-				list = append(list, val)
-			}
-			if maxID < curID {
-				maxID = curID
-				mID = cID
-			}
-		}
-	}
-	return list, mID, nil
-}
-
-func scalarHandler(ctx context.Context, msgs []interface{}) {
+func configHandler(ctx context.Context, msgs []interface{}) {
 	for _, v := range msgs {
 		switch v.(bson.M)["tag"] {
-		case "scalar":
-			sState.mx.Lock()
-			boxID := int(v.(bson.M)["event"].(bson.M)["box_id"].(int))
-			varID := int(v.(bson.M)["event"].(bson.M)["var_id"].(int))
-			if sState.state[boxID] == nil {
-				sState.state[boxID] = make(map[int]*bson.M)
+		case "config":
+			currentConfig.mx.Lock()
+			s, err := json.Marshal(v.(bson.M))
+			if err != nil {
+				log.Println("ERROR reading config from repository.", err.Error())
 			}
-			vV := v.(bson.M)
-			sState.state[boxID][varID] = &vV
-			sState.mx.Unlock()
+			currentConfig.config = string(s)
+			currentConfig.mx.Unlock()
 			if !isCurrent {
-				if sState.lastID < v.(bson.M)["_id"].(bson.ObjectId).Hex() {
+				if currentConfig.lastID < v.(bson.M)["_id"].(bson.ObjectId).Hex() {
 					isCurrent = true
+
 				}
 			} else {
-				sState.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
+				currentConfig.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 			}
-			ctx.Value("stateUpdateChannel").(chan *bson.M) <- &(vV)
+			log.Println("Configuration changed.", string(s))
 			break
 		}
 	}
 	if isCurrent {
-		fmt.Print("+")
+		fmt.Print("*")
 	} else {
-		fmt.Print("-")
+		fmt.Print(".")
 	}
 }
 
@@ -131,15 +89,9 @@ Loop:
 			clients = append(clients, cli)
 			_, toWS, _ := cli.GetChannels()
 			if isCurrent {
-				m := wsock.MessageT{}
-				l, _, err := sState.serialize2Slice("")
-				if err != nil {
-					log.Println("Error serializing message", err)
-				}
-				m["state"] = l
-				if len(m["state"].([]*bson.M)) > 0 {
-					toWS <- &m
-				}
+				c := wsock.MessageT{}
+				c["config"] = currentConfig.config
+				toWS <- &c
 			}
 			break
 		case cli := <-delCh:
@@ -173,23 +125,21 @@ func main() {
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}
-	wsServer := wsock.NewServer(props["current.uri"])
+	wsServer := wsock.NewServer(props["configsrv.uri"])
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
 	}
-	sState = ScalarState{}
-	sState.state = make(map[int]map[int]*bson.M)
-	sState.mx = &sync.Mutex{}
+	currentConfig = Config{}
+	currentConfig.mx = &sync.Mutex{}
 	isCurrent = false
 	stateUpdateChannel := make(chan *bson.M, 256)
-	err = evStore.Listenner2().Subscribe2("scalar", scalarHandler)
+	err = evStore.Listenner2().Subscribe2("config", configHandler)
 	if err != nil {
-		log.Fatalln("Error subscribing for changes", err)
+		log.Fatalln("Error subscribing for config changes", err)
 	}
 	ctx1, cancel := context.WithCancel(context.Background())
 	ctx := context.WithValue(ctx1, "stateUpdateChannel", stateUpdateChannel)
 	defer cancel()
-	sState.lastID = evStore.Listenner2().GetLastID()
 	log.Println("Before Listen call")
 	go evStore.Listenner2().Listen(ctx, id)
 
@@ -197,6 +147,6 @@ func main() {
 	go wsServer.Listen()
 
 	//http.Handle(props["static.url"], http.FileServer(http.Dir("webroot")))
-	err = http.ListenAndServe(props["current.url"], nil)
+	err = http.ListenAndServe(props["configsrv.url"], nil)
 	evStore.Close()
 }
