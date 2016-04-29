@@ -1,5 +1,5 @@
 {
-  "timestamp": new Date("2016-04-29T11:59:59.0+03:00"),
+  "timestamp": new Date("2016-04-29T12:59:59.0+03:00"),
   "tag": "config",
   "config": {
     "system": {

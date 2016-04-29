@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -27,7 +26,7 @@ type (
 	ClientSlice []*wsock.Client
 	// Config struct stores current system configuration
 	Config struct {
-		config string
+		config interface{}
 		lastID string
 		mx     *sync.Mutex
 	}
@@ -44,11 +43,11 @@ func configHandler(ctx context.Context, msgs []interface{}) {
 		switch v.(bson.M)["tag"] {
 		case "config":
 			currentConfig.mx.Lock()
-			s, err := json.Marshal(v.(bson.M))
-			if err != nil {
-				log.Println("ERROR reading config from repository.", err.Error())
-			}
-			currentConfig.config = string(s)
+			//			s, err := json.Marshal(v.(bson.M))
+			//			if err != nil {
+			//				log.Println("ERROR reading config from repository.", err.Error())
+			//			}
+			currentConfig.config = v.(bson.M)
 			currentConfig.mx.Unlock()
 			if !isCurrent {
 				if currentConfig.lastID < v.(bson.M)["_id"].(bson.ObjectId).Hex() {
@@ -58,7 +57,6 @@ func configHandler(ctx context.Context, msgs []interface{}) {
 			} else {
 				currentConfig.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 			}
-			log.Println("Configuration changed.", string(s))
 			break
 		}
 	}
@@ -90,7 +88,7 @@ Loop:
 			_, toWS, _ := cli.GetChannels()
 			if isCurrent {
 				c := wsock.MessageT{}
-				c["config"] = currentConfig.config
+				c["msg"] = currentConfig.config
 				toWS <- &c
 			}
 			break
