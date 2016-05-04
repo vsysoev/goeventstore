@@ -1,11 +1,9 @@
 package main
 
-//DONE:50 Cleanup deadcode after refactoring
-//DONE:30 Need one handler to support global state update. Implemented global ScalarState update single database readings
 //TODO:10 State may be requested by id or time
-//DONE:40 When you connect you get full state and next only updates until reconnect
-//DONE:90 Updates of state should be passed through pub/sub
+//DOING:0 Filter output of state by params in request
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -34,8 +32,14 @@ type (
 		mx     *sync.Mutex
 		lastID string
 	}
+
+	// ClientWithFilter stores pointer to client and params
+	ClientWithFilter struct {
+		client *wsock.Client
+		filter map[int]bool
+	}
 	// ClientSlice define type for store clients connected
-	ClientSlice []*wsock.Client
+	ClientSlice []*ClientWithFilter
 )
 
 var (
@@ -111,8 +115,75 @@ func scalarHandler(ctx context.Context, msgs []interface{}) {
 	}
 }
 
+func handleClient(ctx context.Context) {
+	var (
+		fltr map[string]interface{}
+		c    ClientWithFilter
+	)
+	c.client = ctx.Value("client").(*wsock.Client)
+	c.filter = make(map[int]bool, 0)
+	fromWS, toWS, doneCh := c.client.GetChannels()
+Loop:
+	for {
+		select {
+		case <-doneCh:
+			log.Println("doneCh in handleClient")
+			break Loop
+		case msg := <-fromWS:
+			log.Println(msg)
+			err := json.Unmarshal([]byte(msg.String()), &fltr)
+			if err != nil {
+				log.Println("Error in filter", err)
+			} else {
+				log.Println("Filter applied", fltr)
+				if boxID, ok := fltr["box_id"]; ok {
+					if varID, ok := fltr["var_id"]; ok {
+						val := int(boxID.(float64))<<16 + int(varID.(float64))
+						c.filter[val] = true
+						log.Println(c.filter)
+						if isCurrent {
+							for boxID, box := range sState.state {
+								for varID, val := range box {
+									flID := int(boxID)<<16 + int(varID)
+									if _, ok := c.filter[flID]; ok {
+										m := wsock.MessageT{}
+										m["msg"] = val
+										toWS <- &m
+									}
+								}
+							}
+						}
+					} else {
+						log.Println("Error not varID in filter")
+					}
+				} else {
+					log.Println("Error not boxID in filter")
+				}
+			}
+			break
+		case stateMsg := <-ctx.Value("stateUpdateChannel").(chan *bson.M):
+			log.Println(stateMsg)
+			bID := int((*stateMsg)["event"].(bson.M)["box_id"].(int))
+			vID := int((*stateMsg)["event"].(bson.M)["var_id"].(int))
+			flID := bID<<16 + vID
+			if _, ok := c.filter[flID]; ok {
+				m := wsock.MessageT{}
+				m["msg"] = stateMsg
+				toWS <- &m
+			}
+
+			break
+		case <-ctx.Done():
+			log.Println("Context closed")
+			break Loop
+		}
+	}
+}
+
 func processClientConnection(ctx context.Context, s *wsock.Server) {
-	var clients ClientSlice
+	var (
+		clients ClientSlice
+	)
 	addCh, delCh, doneCh, _ := s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)
 
@@ -127,25 +198,13 @@ Loop:
 			break Loop
 		case cli := <-addCh:
 			log.Println("processClientConnection got add client notification", cli)
-			//			go clientProcessor(cli)
-			clients = append(clients, cli)
-			_, toWS, _ := cli.GetChannels()
-			if isCurrent {
-				m := wsock.MessageT{}
-				l, _, err := sState.serialize2Slice("")
-				if err != nil {
-					log.Println("Error serializing message", err)
-				}
-				m["state"] = l
-				if len(m["state"].([]*bson.M)) > 0 {
-					toWS <- &m
-				}
-			}
+			clientContext := context.WithValue(ctx, "client", cli)
+			go handleClient(clientContext)
 			break
 		case cli := <-delCh:
 			log.Println("delCh got client", cli)
 			for i, v := range clients {
-				if v == cli {
+				if v.client == cli {
 					clients = append(clients[:i], clients[i+1:]...)
 					log.Println("Removed client", cli)
 				}
@@ -155,7 +214,7 @@ Loop:
 			out := wsock.MessageT{}
 			out["state"] = msg
 			for _, v := range clients {
-				_, toWS, _ := v.GetChannels()
+				_, toWS, _ := v.client.GetChannels()
 				toWS <- &out
 			}
 		}

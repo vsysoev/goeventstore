@@ -66,7 +66,7 @@ Loop:
 	}
 }
 
-// DOING:0 Events might be submitted through REST interface
+// DOING:10 Events might be submitted through REST interface
 func processClientConnection(s *wsock.Server, props property.PropSet) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -163,7 +163,7 @@ func (c *CommitterT) SubmitEvent(sequenceID string, tag string, eventJSON string
 	return err
 }
 
-// SubmitMapStringEvent submittes event to event store
+// SubmitMapString submittes event to event store
 func (c *CommitterT) SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error {
 	event := make(map[string]interface{})
 	event["sequenceID"] = sequenceID
