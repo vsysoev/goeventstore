@@ -1,2 +1,4 @@
-{"box_id": 2,"var_id": 31}
-{"box_id": 2,"var_id": 37}
+{"filter": [{"box_id": 2,"var_id": 31}]}
+{"filter": [{"box_id": 2,"var_id": 37}]}
+{"filter": [{"box_id": 10, "var_id": 2}]}
+{}

@@ -1,7 +1,6 @@
 package main
 
-//TODO:10 State may be requested by id or time
-//DOING:0 Filter output of state by params in request
+//TODO: clear filter as empty JSON object
 import (
 	"encoding/json"
 	"flag"
@@ -117,8 +116,7 @@ func scalarHandler(ctx context.Context, msgs []interface{}) {
 
 func handleClient(ctx context.Context) {
 	var (
-		fltr map[string]interface{}
-		c    ClientWithFilter
+		c ClientWithFilter
 	)
 	c.client = ctx.Value("client").(*wsock.Client)
 	c.filter = make(map[int]bool, 0)
@@ -130,34 +128,42 @@ Loop:
 			log.Println("doneCh in handleClient")
 			break Loop
 		case msg := <-fromWS:
-			log.Println(msg)
-			err := json.Unmarshal([]byte(msg.String()), &fltr)
+			log.Println("Message from WebSocket ", msg)
+			fltrArray := make(wsock.MessageT, 1)
+			err := json.Unmarshal([]byte(msg.String()), &fltrArray)
 			if err != nil {
 				log.Println("Error in filter", err)
 			} else {
-				log.Println("Filter applied", fltr)
-				if boxID, ok := fltr["box_id"]; ok {
-					if varID, ok := fltr["var_id"]; ok {
-						val := int(boxID.(float64))<<16 + int(varID.(float64))
-						c.filter[val] = true
-						log.Println(c.filter)
-						if isCurrent {
-							for boxID, box := range sState.state {
-								for varID, val := range box {
-									flID := int(boxID)<<16 + int(varID)
-									if _, ok := c.filter[flID]; ok {
-										m := wsock.MessageT{}
-										m["msg"] = val
-										toWS <- &m
+				log.Println("Filter applied", fltrArray)
+				if f, ok := fltrArray["filter"]; ok {
+					for _, fltr := range f.([]interface{}) {
+						if boxID, ok := fltr.(map[string]interface{})["box_id"]; ok {
+							if varID, ok := fltr.(map[string]interface{})["var_id"]; ok {
+								val := int(boxID.(float64))<<16 + int(varID.(float64))
+								c.filter[val] = true
+								log.Println(c.filter)
+								if isCurrent {
+									log.Println(sState.state)
+									for boxID, box := range sState.state {
+										for varID, val := range box {
+											flID := int(boxID)<<16 + int(varID)
+											if _, ok := c.filter[flID]; ok {
+												m := wsock.MessageT{}
+												m["msg"] = val
+												toWS <- &m
+											}
+										}
 									}
 								}
+							} else {
+								log.Println("Error not varID in filter")
+								c.filter = make(map[int]bool, 0)
 							}
+						} else {
+							log.Println("Error not boxID in filter")
+							c.filter = make(map[int]bool, 0)
 						}
-					} else {
-						log.Println("Error not varID in filter")
 					}
-				} else {
-					log.Println("Error not boxID in filter")
 				}
 			}
 			break

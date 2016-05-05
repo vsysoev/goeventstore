@@ -66,7 +66,7 @@ type (
 	// Handler type defines function which will be used as callback
 	Handler func(ctx context.Context, event []interface{})
 	// Listenner2 interface is replacement of Listenner
-	// TODO:0 Remove Listenner interface and rename Listenner2 to Listenner
+	// TODO:10 Remove Listenner interface and rename Listenner2 to Listenner
 	Listenner2 interface {
 		Subscribe2(eventTypes string, handlerFunc Handler) error
 		Unsubscribe2(eventTypes string)

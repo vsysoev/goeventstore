@@ -13,6 +13,7 @@ import (
 )
 
 type (
+	// CommandLineArguments - objects with command line arguments
 	CommandLineArguments struct {
 		server       string
 		msg          string
