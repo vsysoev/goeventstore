@@ -32,6 +32,7 @@ func cli(args CommandLineArguments, wg *sync.WaitGroup) {
 		panic(err)
 	}
 	if args.msg != "" {
+		log.Println("Write data to websocket")
 		_, err = ws.Write([]byte(args.msg))
 		if err != nil {
 			panic(err)
