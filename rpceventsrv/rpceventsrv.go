@@ -40,12 +40,9 @@ func (f *RPCFunction) FindLastEvent(params string) (chan string, error) {
 	return nil, errors.New("Not implmented")
 }
 
-func (f *RPCFunction) Echo(params []interface{}) (string, error) {
-	var ret string
-	for _, k := range params {
-		ret += k.(string)
-	}
-	return ret, nil
+func (f *RPCFunction) Echo(params []interface{}) (interface{}, error) {
+
+	return params, nil
 }
 
 func clientHandler(ctx context.Context, c *wsock.Client, f *RPCFunction) {
@@ -77,14 +74,18 @@ Loop:
 				return
 			}
 			mInterface := m.Interface()
-			mm := mInterface.(func([]interface{}) (string, error))
+			mm := mInterface.(func([]interface{}) (interface{}, error))
 			ch, err := mm(params.([]interface{}))
 			if err != nil {
 				log.Println("Error calling method. ", err)
 				return
 			}
+			log.Println("Function returned", ch)
 			js := wsock.MessageT{}
-			js["msg"] = ch
+			js["jsonrpc"] = (*request)["jsonrpc"]
+			js["id"] = (*request)["id"]
+			js["result"] = ch
+
 			toWS <- &js
 			break
 		case <-doneCh:
