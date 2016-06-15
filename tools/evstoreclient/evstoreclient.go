@@ -21,7 +21,7 @@ import (
 	"github.com/vsysoev/goeventstore/evstore"
 )
 
-func Send2EventStore(r *bufio.Reader, evStore *evstore.Connection) {
+func send2EventStore(r *bufio.Reader, evStore *evstore.Connection) {
 	for {
 		s, _, err := r.ReadLine()
 		if err == io.EOF {
@@ -69,12 +69,12 @@ func genValue(mode map[string]interface{}) (float64, map[string]interface{}) {
 	}
 	return 0.0, nil
 }
-func genData(ctx context.Context, modeString []byte, chanOutput chan string) {
+func genData(ctx context.Context, modeString string, chanOutput chan string) {
 	var (
 		mode  map[string]interface{}
 		value float64
 	)
-	err := json.Unmarshal(modeString, &mode)
+	err := json.Unmarshal([]byte(modeString), &mode)
 	if err != nil {
 		log.Panicln("Error in generation mode:", string(modeString))
 	}
@@ -96,7 +96,7 @@ Loop:
 		}
 	}
 }
-func GenDataFromGenFile(ctx context.Context, genFile *bufio.Reader, evStore *evstore.Connection) {
+func genDataFromGenFile(ctx context.Context, genFile *bufio.Reader, evStore *evstore.Connection) {
 	chanInput := make(chan string, 1)
 	for {
 		s, _, err := genFile.ReadLine()
@@ -107,7 +107,7 @@ func GenDataFromGenFile(ctx context.Context, genFile *bufio.Reader, evStore *evs
 		if err != nil {
 			log.Panicln(err)
 		}
-		go genData(ctx, s, chanInput)
+		go genData(ctx, string(s), chanInput)
 	}
 	log.Println("Waiting for Ctrl-C")
 Loop:
@@ -142,7 +142,7 @@ func main() {
 		log.Panicln(err)
 	}
 	if fileName != "" {
-		if _, err := os.Stat(fileName); err != nil {
+		if _, err = os.Stat(fileName); err != nil {
 			log.Panicln(err)
 		}
 		f, err := os.Open(fileName)
@@ -150,7 +150,7 @@ func main() {
 			log.Panicln(err)
 		}
 		r := bufio.NewReader(f)
-		Send2EventStore(r, evStore)
+		send2EventStore(r, evStore)
 	}
 	if msg != "" {
 		err = evStore.Committer().SubmitEvent("", "scalar", msg)
@@ -168,7 +168,7 @@ func main() {
 		}
 		r := bufio.NewReader(f)
 		log.Println("Start GenDataFromGenFile")
-		GenDataFromGenFile(context.Background(), r, evStore)
+		genDataFromGenFile(context.Background(), r, evStore)
 	}
 	evStore.Close()
 }

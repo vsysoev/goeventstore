@@ -84,12 +84,46 @@ func (s ScalarState) serialize2Slice(id string) ([]*bson.M, string, error) {
 }
 
 func scalarHandler(ctx context.Context, msgs []interface{}) {
+	var (
+		boxID, varID int
+	)
 	for _, v := range msgs {
 		switch v.(bson.M)["tag"] {
 		case "scalar":
 			sState.mx.Lock()
-			boxID := int(v.(bson.M)["event"].(bson.M)["box_id"].(int))
-			varID := int(v.(bson.M)["event"].(bson.M)["var_id"].(int))
+			switch bID := v.(bson.M)["event"].(bson.M)["box_id"].(type) {
+			case int:
+				boxID = int(bID)
+			case int32:
+				boxID = int(bID)
+			case int64:
+				boxID = int(bID)
+			case float32:
+				boxID = int(bID)
+			case float64:
+				boxID = int(bID)
+			default:
+				boxID = -1
+				log.Println("Error in boxID", bID)
+				return
+			}
+			switch vID := v.(bson.M)["event"].(bson.M)["var_id"].(type) {
+			case int:
+				varID = int(vID)
+			case int32:
+				varID = int(vID)
+			case int64:
+				varID = int(vID)
+			case float32:
+				varID = int(vID)
+			case float64:
+				varID = int(vID)
+			default:
+				varID = -1
+				log.Println("Error in varID", vID)
+				return
+
+			}
 			if sState.state[boxID] == nil {
 				sState.state[boxID] = make(map[int]*bson.M)
 			}
@@ -168,9 +202,19 @@ Loop:
 			}
 			break
 		case stateMsg := <-ctx.Value("stateUpdateChannel").(chan *bson.M):
+			var (
+				bID, vID int
+				ok       bool
+			)
 			log.Println(stateMsg)
-			bID := int((*stateMsg)["event"].(bson.M)["box_id"].(int))
-			vID := int((*stateMsg)["event"].(bson.M)["var_id"].(int))
+			bID, ok = (*stateMsg)["event"].(bson.M)["box_id"].(int)
+			if !ok {
+				bID = int((*stateMsg)["event"].(bson.M)["box_id"].(float64))
+			}
+			vID, ok = (*stateMsg)["event"].(bson.M)["var_id"].(int)
+			if !ok {
+				bID = int((*stateMsg)["event"].(bson.M)["var_id"].(float64))
+			}
 			flID := bID<<16 + vID
 			if _, ok := c.filter[flID]; ok {
 				m := wsock.MessageT{}
