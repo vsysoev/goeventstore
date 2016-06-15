@@ -127,7 +127,6 @@ func scalarHandler(ctx context.Context, msgs []interface{}) {
 				varID = -1
 				log.Println("Error in varID", vID)
 				return
-
 			}
 			if sState.state[boxID] == nil {
 				sState.state[boxID] = make(map[int]*bson.M)

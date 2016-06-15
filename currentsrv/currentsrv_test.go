@@ -5,10 +5,12 @@ import (
 	"log"
 	"math/rand"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 
 	"golang.org/x/net/context"
 
@@ -62,5 +64,70 @@ func TestCurrentScalarState(t *testing.T) {
 			So(err, ShouldBeNil)
 		}
 		ev.Close()
+	})
+}
+
+func TestScalarHandler(t *testing.T) {
+	Convey("When pass empty message slice to scalarHandler", t, func() {
+		var msgs []interface{}
+		Convey("It should not panic", func() {
+			So(func() { scalarHandler(context.Background(), msgs) }, ShouldNotPanic)
+		})
+	})
+	Convey("When pass message with int boxID, varID", t, func() {
+		var msgs []interface{}
+		sState = ScalarState{}
+		sState.state = make(map[int]map[int]*bson.M)
+		sState.mx = &sync.Mutex{}
+		stateUpdateChannel := make(chan *bson.M, 256)
+		ctx := context.WithValue(context.Background(), "stateUpdateChannel", stateUpdateChannel)
+		id := bson.NewObjectId()
+		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": 1, "var_id": 1, "value": 1.5}}
+		msgs = append(msgs, msg)
+		Convey("It should not panic with type assertion", func() {
+			So(func() { scalarHandler(ctx, msgs) }, ShouldNotPanic)
+		})
+	})
+	Convey("When pass message with float64 boxID, varID", t, func() {
+		var msgs []interface{}
+		sState = ScalarState{}
+		sState.state = make(map[int]map[int]*bson.M)
+		sState.mx = &sync.Mutex{}
+		stateUpdateChannel := make(chan *bson.M, 256)
+		ctx := context.WithValue(context.Background(), "stateUpdateChannel", stateUpdateChannel)
+		id := bson.NewObjectId()
+		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": 1.0, "var_id": 1.0, "value": 1.5}}
+		msgs = append(msgs, msg)
+		Convey("It should not panic with type assertion", func() {
+			So(func() { scalarHandler(ctx, msgs) }, ShouldNotPanic)
+		})
+	})
+	Convey("When pass message with string boxID, varID", t, func() {
+		var msgs []interface{}
+		sState = ScalarState{}
+		sState.state = make(map[int]map[int]*bson.M)
+		sState.mx = &sync.Mutex{}
+		stateUpdateChannel := make(chan *bson.M, 256)
+		ctx := context.WithValue(context.Background(), "stateUpdateChannel", stateUpdateChannel)
+		id := bson.NewObjectId()
+		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": "1.0", "var_id": "1.0", "value": 1.5}}
+		msgs = append(msgs, msg)
+		Convey("It should not panic with type assertion", func() {
+			So(func() { scalarHandler(ctx, msgs) }, ShouldNotPanic)
+		})
+	})
+	Convey("When pass message with int boxID and string varID", t, func() {
+		var msgs []interface{}
+		sState = ScalarState{}
+		sState.state = make(map[int]map[int]*bson.M)
+		sState.mx = &sync.Mutex{}
+		stateUpdateChannel := make(chan *bson.M, 256)
+		ctx := context.WithValue(context.Background(), "stateUpdateChannel", stateUpdateChannel)
+		id := bson.NewObjectId()
+		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": 1, "var_id": "1.0", "value": 1.5}}
+		msgs = append(msgs, msg)
+		Convey("It should not panic with type assertion", func() {
+			So(func() { scalarHandler(ctx, msgs) }, ShouldNotPanic)
+		})
 	})
 }
