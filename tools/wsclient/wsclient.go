@@ -14,12 +14,14 @@ import (
 )
 
 type (
+	// CommandLineArguments - objects with command line arguments
 	CommandLineArguments struct {
 		server       string
 		msg          string
 		file         string
 		timeOut      int
 		clientNumber int
+		delay        int
 	}
 )
 
@@ -41,24 +43,28 @@ func cli(args CommandLineArguments, wg *sync.WaitGroup) {
 		panic(err)
 	}
 	if args.msg != "" {
+		log.Println("Write data to websocket")
 		_, err = ws.Write([]byte(args.msg))
 		if err != nil {
 			panic(err)
 		}
 	}
 	if args.file != "" {
-		f, err := os.Open(args.file)
-		if err != nil {
-			panic(err)
-		}
-		defer f.Close()
-		s := bufio.NewScanner(f)
-		for s.Scan() {
-			_, err = ws.Write([]byte(s.Text()))
+		go func() {
+			f, err := os.Open(args.file)
 			if err != nil {
 				panic(err)
 			}
-		}
+			defer f.Close()
+			s := bufio.NewScanner(f)
+			for s.Scan() {
+				time.Sleep(time.Duration(args.delay) * time.Second)
+				_, err = ws.Write([]byte(s.Text()))
+				if err != nil {
+					panic(err)
+				}
+			}
+		}()
 	}
 	ws.SetReadDeadline(time.Now().Add(time.Second * time.Duration(args.timeOut)))
 	msgOut := make([]byte, 16384)
@@ -88,6 +94,7 @@ func main() {
 	flag.StringVar(&args.msg, "m", "", "Message to send")
 	flag.StringVar(&args.file, "f", "", "File with json messages to send")
 	flag.IntVar(&args.timeOut, "t", 3, "Timeout in seconds")
+	flag.IntVar(&args.delay, "d", 0, "Delay before sending each command in seconds")
 	flag.Parse()
 	if !flag.Parsed() {
 		flag.PrintDefaults()

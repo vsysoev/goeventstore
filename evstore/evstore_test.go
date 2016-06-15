@@ -203,7 +203,7 @@ func TestListen2Interface(t *testing.T) {
 		So(ev, ShouldNotBeNil)
 		ev.Committer().SubmitEvent("", "fake", "{\"event\":\"fake\"}")
 		So(err, ShouldBeNil)
-		id := ev.Listenner2().GetLastId()
+		id := ev.Listenner2().GetLastID()
 		So(id, ShouldNotEqual, "")
 		ev.Close()
 

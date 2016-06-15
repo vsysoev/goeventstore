@@ -44,7 +44,6 @@ func CleanupCollections() {
 	_ = session.DB("test").C("submitevents_capped").DropCollection()
 }
 
-//DONE:90 This test should be rewritten to submit event through websocket.
 func TestSubmitEvent(t *testing.T) {
 	Convey("Submit simple event", t, func() {
 		var (

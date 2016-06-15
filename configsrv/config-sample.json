@@ -1,0 +1,783 @@
+{
+  "timestamp": new Date("2016-06-15T12:59:59.0+03:00"),
+  "tag": "config",
+  "config": {
+    "system": {
+      "title": "Тестовая система",
+      "workshops": [
+        {
+          "title": "Цех №1",
+          "units": [
+            {
+              "title": "Подшипник №1",
+              "points":[
+                {
+                  "title": "1 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 1,
+                  "var_id": 1
+                },
+                {
+                  "title": "2 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 1,
+                  "var_id": 2
+                },
+                {
+                  "title": "3 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 1,
+                  "var_id": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Цех №2",
+          "units": [
+            {
+              "title": "Подшипник №99",
+              "points":[
+                {
+                  "title": "1 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 1
+                },
+                {
+                  "title": "2 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 2
+                },
+                {
+                  "title": "3 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 3
+                },
+                {
+                  "title": "4 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 4
+                },
+                {
+                  "title": "5 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 5
+                },
+                {
+                  "title": "6 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 6
+                },
+                {
+                  "title": "7 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 7
+                },
+                {
+                  "title": "8 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 8
+                },
+                {
+                  "title": "9 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 9
+                },
+                {
+                  "title": "10 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 10
+                },
+                {
+                  "title": "11 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 11
+                },
+                {
+                  "title": "12 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 12
+                },
+                {
+                  "title": "13 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 13
+                },
+                {
+                  "title": "14 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 14
+                },
+                {
+                  "title": "15 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 15
+                },
+                {
+                  "title": "16 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 16
+                },
+                {
+                  "title": "17 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 17
+                },
+                {
+                  "title": "18 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 18
+                },
+                {
+                  "title": "19 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 19
+                },
+                {
+                  "title": "20 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 20
+                },
+                {
+                  "title": "21 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 21
+                },
+                {
+                  "title": "22 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 22
+                },
+                {
+                  "title": "23 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 23
+                },
+                {
+                  "title": "24 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 24
+                },
+                {
+                  "title": "25 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 25
+                },
+                {
+                  "title": "26 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 26
+                },
+                {
+                  "title": "27 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 27
+                },
+                {
+                  "title": "28 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 28
+                },
+                {
+                  "title": "29 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 29
+                },
+                {
+                  "title": "30 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 30
+                },
+                {
+                  "title": "31 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 31
+                },
+                {
+                  "title": "32 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 32
+                },
+                {
+                  "title": "33 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 33
+                },
+                {
+                  "title": "34 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 34
+                },
+                {
+                  "title": "35 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 35
+                },
+                {
+                  "title": "36 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 36
+                },
+                {
+                  "title": "37 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 37
+                },
+                {
+                  "title": "38 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 38
+                },
+                {
+                  "title": "39 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 39
+                },
+                {
+                  "title": "40 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 40
+                },
+                {
+                  "title": "41 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 41
+                },
+                {
+                  "title": "42 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 42
+                },
+                {
+                  "title": "43 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 43
+                },
+                {
+                  "title": "44 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 44
+                },
+                {
+                  "title": "45 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 45
+                },
+                {
+                  "title": "46 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 46
+                },
+                {
+                  "title": "47 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 47
+                },
+                {
+                  "title": "48 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 48
+                },
+                {
+                  "title": "49 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 49
+                },
+                {
+                  "title": "50 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 50
+                },
+                {
+                  "title": "51 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 51
+                },
+                {
+                  "title": "52 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 52
+                },
+                {
+                  "title": "53 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 53
+                },
+                {
+                  "title": "54 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 54
+                },
+                {
+                  "title": "55 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 55
+                },
+                {
+                  "title": "56 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 56
+                },
+                {
+                  "title": "57 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 57
+                },
+                {
+                  "title": "58 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 58
+                },
+                {
+                  "title": "59 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 59
+                },
+                {
+                  "title": "60 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 60
+                },
+                {
+                  "title": "61 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 61
+                },
+                {
+                  "title": "62 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 62
+                },
+                {
+                  "title": "63 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 63
+                },
+                {
+                  "title": "64 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 64
+                },
+                {
+                  "title": "65 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 65
+                },
+                {
+                  "title": "66 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 66
+                },
+                {
+                  "title": "67 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 67
+                },
+                {
+                  "title": "68 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 68
+                },
+                {
+                  "title": "69 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 69
+                },
+                {
+                  "title": "70 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 70
+                },
+                {
+                  "title": "71 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 71
+                },
+                {
+                  "title": "72 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 72
+                },
+                {
+                  "title": "73 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 73
+                },
+                {
+                  "title": "74 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 74
+                },
+                {
+                  "title": "75 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 75
+                },
+                {
+                  "title": "76 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 76
+                },
+                {
+                  "title": "77 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 77
+                },
+                {
+                  "title": "78 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 78
+                },
+                {
+                  "title": "79 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 79
+                },
+                {
+                  "title": "80 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 80
+                },
+                {
+                  "title": "81 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 81
+                },
+                {
+                  "title": "82 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 82
+                },
+                {
+                  "title": "83 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 83
+                },
+                {
+                  "title": "84 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 84
+                },
+                {
+                  "title": "85 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 85
+                },
+                {
+                  "title": "86 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 86
+                },
+                {
+                  "title": "87 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 87
+                },
+                {
+                  "title": "88 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 88
+                },
+                {
+                  "title": "89 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 89
+                },
+                {
+                  "title": "90 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 90
+                },
+                {
+                  "title": "91 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 91
+                },
+                {
+                  "title": "92 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 92
+                },
+                {
+                  "title": "93 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 93
+                },
+                {
+                  "title": "94 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 94
+                },
+                {
+                  "title": "95 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 95
+                },
+                {
+                  "title": "96 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 96
+                },
+                {
+                  "title": "97 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 97
+                },
+                {
+                  "title": "98 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 98
+                },
+                {
+                  "title": "99 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 99
+                },
+                {
+                  "title": "100 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 99,
+                  "var_id": 100
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Цех №3",
+          "units": [
+            {
+              "title": "Подшипник №3",
+              "points":[
+                {
+                  "title": "1 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 3,
+                  "var_id": 1
+                },
+                {
+                  "title": "2 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 3,
+                  "var_id": 2
+                },
+                {
+                  "title": "3 RMS",
+                  "host": "127.0.0.1",
+                  "db": "mt",
+                  "box_id": 3,
+                  "var_id": 3
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

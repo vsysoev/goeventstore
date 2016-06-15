@@ -5,17 +5,15 @@ package main
 //TODO:20 State may be requested by id or time
 //DONE:50 When you connect you get full state and next only updates until reconnect
 //DONE:100 Updates of state should be passed through pub/sub
+
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"runtime/pprof"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"gopkg.in/mgo.v2/bson"
@@ -34,18 +32,24 @@ const (
 type (
 	//ScalarState holds global current state
 	ScalarState struct {
-		state     map[int]map[int]*bson.M
-		mx        *sync.Mutex
-		isCurrent bool
-		lastID    string
+		state  map[int]map[int]*bson.M
+		mx     *sync.Mutex
+		lastID string
+	}
+
+	// ClientWithFilter stores pointer to client and params
+	ClientWithFilter struct {
+		client *wsock.Client
+		filter map[int]bool
 	}
 	// ClientSlice define type for store clients connected
-	ClientSlice []*wsock.Client
+	ClientSlice []*ClientWithFilter
 )
 
 var (
-	sState  ScalarState
-	clients ClientSlice
+	sState    ScalarState
+	clients   ClientSlice
+	isCurrent bool
 )
 
 func (s ScalarState) serialize2Slice(id string) ([]*bson.M, string, error) {
@@ -84,38 +88,157 @@ func (s ScalarState) serialize2Slice(id string) ([]*bson.M, string, error) {
 	return list, mID, nil
 }
 
-func messageHandler(ctx context.Context, msgs []interface{}) {
+func scalarHandler(ctx context.Context, msgs []interface{}) {
+	var (
+		boxID, varID int
+	)
 	for _, v := range msgs {
-		if v.(bson.M)["tag"] == "scalar" {
+		switch v.(bson.M)["tag"] {
+		case "scalar":
 			sState.mx.Lock()
-			boxID := int(v.(bson.M)["event"].(bson.M)["box_id"].(int))
-			varID := int(v.(bson.M)["event"].(bson.M)["var_id"].(int))
+			switch bID := v.(bson.M)["event"].(bson.M)["box_id"].(type) {
+			case int:
+				boxID = int(bID)
+			case int32:
+				boxID = int(bID)
+			case int64:
+				boxID = int(bID)
+			case float32:
+				boxID = int(bID)
+			case float64:
+				boxID = int(bID)
+			default:
+				boxID = -1
+				log.Println("Error in boxID", bID)
+				return
+			}
+			switch vID := v.(bson.M)["event"].(bson.M)["var_id"].(type) {
+			case int:
+				varID = int(vID)
+			case int32:
+				varID = int(vID)
+			case int64:
+				varID = int(vID)
+			case float32:
+				varID = int(vID)
+			case float64:
+				varID = int(vID)
+			default:
+				varID = -1
+				log.Println("Error in varID", vID)
+				return
+
+			}
 			if sState.state[boxID] == nil {
 				sState.state[boxID] = make(map[int]*bson.M)
 			}
 			vV := v.(bson.M)
 			sState.state[boxID][varID] = &vV
 			sState.mx.Unlock()
-			if !sState.isCurrent {
-				if sState.lastID == v.(bson.M)["_id"].(bson.ObjectId).Hex() {
-					sState.isCurrent = true
+			if !isCurrent {
+				if sState.lastID < v.(bson.M)["_id"].(bson.ObjectId).Hex() {
+					isCurrent = true
 				}
 			} else {
 				sState.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 			}
 			ctx.Value("stateUpdateChannel").(chan *bson.M) <- &(vV)
+			break
 		}
 	}
-	if sState.isCurrent {
+	if isCurrent {
 		fmt.Print("+")
 	} else {
 		fmt.Print("-")
 	}
 }
 
+func handleClient(ctx context.Context) {
+	var (
+		c ClientWithFilter
+	)
+	c.client = ctx.Value("client").(*wsock.Client)
+	c.filter = make(map[int]bool, 0)
+	fromWS, toWS, doneCh := c.client.GetChannels()
+Loop:
+	for {
+		select {
+		case <-doneCh:
+			log.Println("doneCh in handleClient")
+			break Loop
+		case msg := <-fromWS:
+			log.Println("Message from WebSocket ", msg)
+			fltrArray := make(wsock.MessageT, 1)
+			err := json.Unmarshal([]byte(msg.String()), &fltrArray)
+			if err != nil {
+				log.Println("Error in filter", err)
+			} else {
+				log.Println("Filter applied", fltrArray)
+				if f, ok := fltrArray["filter"]; ok {
+					for _, fltr := range f.([]interface{}) {
+						if boxID, ok := fltr.(map[string]interface{})["box_id"]; ok {
+							if varID, ok := fltr.(map[string]interface{})["var_id"]; ok {
+								val := int(boxID.(float64))<<16 + int(varID.(float64))
+								c.filter[val] = true
+								log.Println(c.filter)
+								if isCurrent {
+									log.Println(sState.state)
+									for boxID, box := range sState.state {
+										for varID, val := range box {
+											flID := int(boxID)<<16 + int(varID)
+											if _, ok := c.filter[flID]; ok {
+												m := wsock.MessageT{}
+												m["msg"] = val
+												toWS <- &m
+											}
+										}
+									}
+								}
+							} else {
+								log.Println("Error not varID in filter")
+								c.filter = make(map[int]bool, 0)
+							}
+						} else {
+							log.Println("Error not boxID in filter")
+							c.filter = make(map[int]bool, 0)
+						}
+					}
+				}
+			}
+			break
+		case stateMsg := <-ctx.Value("stateUpdateChannel").(chan *bson.M):
+			var (
+				bID, vID int
+				ok       bool
+			)
+			log.Println(stateMsg)
+			bID, ok = (*stateMsg)["event"].(bson.M)["box_id"].(int)
+			if !ok {
+				bID = int((*stateMsg)["event"].(bson.M)["box_id"].(float64))
+			}
+			vID, ok = (*stateMsg)["event"].(bson.M)["var_id"].(int)
+			if !ok {
+				bID = int((*stateMsg)["event"].(bson.M)["var_id"].(float64))
+			}
+			flID := bID<<16 + vID
+			if _, ok := c.filter[flID]; ok {
+				m := wsock.MessageT{}
+				m["msg"] = stateMsg
+				toWS <- &m
+			}
+
+			break
+		case <-ctx.Done():
+			log.Println("Context closed")
+			break Loop
+		}
+	}
+}
+
 func processClientConnection(ctx context.Context, s *wsock.Server) {
-	var clients ClientSlice
-	log.Println("Enter processClientConnection")
+	var (
+		clients ClientSlice
+	)
 	addCh, delCh, doneCh, _ := s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)
 
@@ -130,25 +253,13 @@ Loop:
 			break Loop
 		case cli := <-addCh:
 			log.Println("processClientConnection got add client notification", cli)
-			//			go clientProcessor(cli)
-			clients = append(clients, cli)
-			_, toWS, _ := cli.GetChannels()
-			if sState.isCurrent {
-				m := wsock.MessageT{}
-				l, _, err := sState.serialize2Slice("")
-				if err != nil {
-					log.Println("Error serializing message", err)
-				}
-				m["state"] = l
-				if len(m["state"].([]*bson.M)) > 0 {
-					toWS <- &m
-				}
-			}
+			clientContext := context.WithValue(ctx, "client", cli)
+			go handleClient(clientContext)
 			break
 		case cli := <-delCh:
 			log.Println("delCh got client", cli)
 			for i, v := range clients {
-				if v == cli {
+				if v.client == cli {
 					clients = append(clients[:i], clients[i+1:]...)
 					log.Println("Removed client", cli)
 				}
@@ -158,7 +269,7 @@ Loop:
 			out := wsock.MessageT{}
 			out["state"] = msg
 			for _, v := range clients {
-				_, toWS, _ := v.GetChannels()
+				_, toWS, _ := v.client.GetChannels()
 				toWS <- &out
 			}
 		}
@@ -167,26 +278,9 @@ Loop:
 }
 
 func main() {
-	f, err := os.Create("currentsrv.prof")
-	if err != nil {
-		log.Fatal(err)
-	}
 	var id string
 	flag.StringVar(&id, "id", "", "ID to subscribe from")
 	flag.Parse()
-	pprof.StartCPUProfile(f)
-	defer pprof.StopCPUProfile()
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		select {
-		case <-c:
-			fmt.Println("Stop profiling")
-			pprof.StopCPUProfile()
-			syscall.Exit(0)
-		}
-	}()
-
 	props := property.Init()
 
 	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.stream"])
@@ -198,18 +292,19 @@ func main() {
 		log.Fatalln("Error creating new websocket server")
 	}
 	sState = ScalarState{}
-	sState.isCurrent = false
 	sState.state = make(map[int]map[int]*bson.M)
-	sState.mx = new(sync.Mutex)
+	sState.mx = &sync.Mutex{}
+	isCurrent = false
 	stateUpdateChannel := make(chan *bson.M, 256)
-	err = evStore.Listenner2().Subscribe2("scalar", messageHandler)
+	err = evStore.Listenner2().Subscribe2("scalar", scalarHandler)
 	if err != nil {
 		log.Fatalln("Error subscribing for changes", err)
 	}
 	ctx1, cancel := context.WithCancel(context.Background())
 	ctx := context.WithValue(ctx1, "stateUpdateChannel", stateUpdateChannel)
 	defer cancel()
-	sState.lastID = evStore.Listenner2().GetLastId()
+	sState.lastID = evStore.Listenner2().GetLastID()
+	log.Println("Before Listen call")
 	go evStore.Listenner2().Listen(ctx, id)
 
 	go processClientConnection(ctx, wsServer)
