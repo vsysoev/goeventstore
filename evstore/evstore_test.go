@@ -213,8 +213,6 @@ func sampleHandler(ctx context.Context, events []interface{}) {
 	for _, event := range events {
 		log.Println(event)
 	}
-
-	return
 }
 func panicHandler(ctx context.Context, event []interface{}) {
 	panic("panic Handler fired")

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -17,11 +18,13 @@ import (
 	"github.com/vsysoev/goeventstore/wsock"
 )
 
+//TODO:0 Implement ONLY HTTPS post of events
+//DOING:0 Implements baseauth authorization
+
 type (
 	Connector wsock.Connector
 )
 
-// DONE:50 Events might be submitted through websocket
 func handleClientRequest(ctx context.Context, c Connector, e *evstore.Connection) {
 	var ev map[string]interface{}
 	fromWS, toWS, doneCh := c.GetChannels()
@@ -32,7 +35,6 @@ Loop:
 		case <-doneCh:
 			break Loop
 		case msg := <-fromWS:
-			//DONE:20 Need message format check and report in case of failure
 			response := wsock.MessageT{"reply": "ok"}
 			seqid := ""
 			if val, ok := (*msg)["sequenceid"].(string); ok {
@@ -66,7 +68,6 @@ Loop:
 	}
 }
 
-// TODO:0 Events might be submitted through REST interface
 func processClientConnection(s *wsock.Server, props property.PropSet) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -106,31 +107,29 @@ Loop:
 	}
 	log.Println("processClientConnection exited")
 }
-func handlePostRequest(w http.ResponseWriter, req *http.Request) {
-	props := property.Init()
+func readRequestBody(req *http.Request) ([]byte, error) {
 	data := make([]byte, 2048)
-	log.Println(req.URL, req.Method)
 	n, err := req.Body.Read(data)
 	if n == 0 {
-		io.WriteString(w, "No data posted")
-		return
+		return nil, errors.New("No data posted")
 	}
 	if err != nil && err != io.EOF {
-		io.WriteString(w, "Error while reading request body")
-		return
+		return nil, err
 	}
-	streamName := props["mongodb.stream"]
-	if req.FormValue("stream") != "" {
-		streamName = req.FormValue("stream")
-	}
+	return data[:n], err
+}
+func parseData(data []byte) (map[string]interface{}, error) {
 	m := make(map[string]interface{})
-	err = json.Unmarshal(data[:n], &m)
+	err := json.Unmarshal(data, &m)
 	if err != nil {
-		log.Println("Error parsing data", err)
-		log.Println(string(data))
-		io.WriteString(w, "Error parsing request data")
-		return
+		return nil, errors.New("Error parsing request data")
 	}
+	return m, nil
+}
+func checkAuth() error {
+	return errors.New("Not Implemented")
+}
+func extractEvent(m map[string]interface{}) (string, string, map[string]interface{}, error) {
 	seqid := ""
 	if val, ok := m["sequenceid"].(string); ok {
 		seqid = val
@@ -139,21 +138,58 @@ func handlePostRequest(w http.ResponseWriter, req *http.Request) {
 	if val, ok := m["tag"].(string); ok {
 		tag = val
 	} else {
-		log.Println("Error no tag in event", err)
-		io.WriteString(w, "Error no tag in event")
-		return
+		return "", "", nil, errors.New("Error no tag in event")
 	}
-	ev, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], streamName)
+	event := map[string]interface{}{}
+	if val, ok := m["event"].(map[string]interface{}); ok {
+		event = val
+	} else {
+		return "", "", nil, errors.New("Error no event in message")
+	}
+	return seqid, tag, event, nil
+}
+
+func submitEvent2Datastore(url string,
+	database string,
+	streamName string,
+	seqid string,
+	tag string,
+	event map[string]interface{}) error {
+	ev, err := evstore.Dial(url, database, streamName)
 	if err != nil {
-		log.Println("Error connecting to event store", err)
-		io.WriteString(w, "Error connecting to event store")
-		return
+		return err
 	}
 	defer ev.Close()
-	err = ev.Committer().SubmitMapStringEvent(seqid, tag, m["event"].(map[string]interface{}))
+	err = ev.Committer().SubmitMapStringEvent(seqid, tag, event)
 	if err != nil {
-		log.Println("Error submitting event to event store", err)
-		io.WriteString(w, "Error submitting event to event store")
+		return err
+	}
+	return nil
+}
+func handlePostRequest(w http.ResponseWriter, req *http.Request) {
+	props := property.Init()
+	data, err := readRequestBody(req)
+	if err != nil {
+		io.WriteString(w, err.Error())
+		return
+	}
+	msg, err := parseData(data)
+	if err != nil {
+		io.WriteString(w, err.Error())
+		return
+	}
+	streamName := props["mongodb.stream"]
+	if req.FormValue("stream") != "" {
+		streamName = req.FormValue("stream")
+	}
+	seqid, tag, event, err := extractEvent(msg)
+	if err != nil {
+		io.WriteString(w, err.Error())
+		return
+	}
+	err = submitEvent2Datastore(props["mongodb.url"], props["mongodb.db"], streamName, seqid, tag, event)
+	if err != nil {
+		io.WriteString(w, err.Error())
 		return
 	}
 	io.WriteString(w, "{\"reply\":\"ok\"}")
@@ -169,7 +205,6 @@ func main() {
 		}
 	}()
 	props := property.Init()
-	//DONE:30 evstore should be connected when user connected. Because in request should be defined stream to submit events.
 	wsServer := wsock.NewServer(props["submitevents.uri"])
 	if wsServer == nil {
 		log.Fatalln("Error creating new websocket server")
@@ -177,7 +212,8 @@ func main() {
 	go processClientConnection(wsServer, props)
 	go wsServer.Listen()
 	http.HandleFunc(props["postevents.uri"], handlePostRequest)
-	err := http.ListenAndServe(props["submitevents.url"], nil)
+	go http.ListenAndServe(props["submitevents.url"], nil)
+	err := http.ListenAndServeTLS(props["securepostevents.url"], "server.pem", "server.key", nil)
 	if err != nil {
 		log.Fatalln("Error while ListenAndServer", err)
 	}

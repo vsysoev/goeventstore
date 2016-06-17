@@ -1,6 +1,5 @@
 package wsock
 
-//DONE:60 Incapsulate all client pool activity here
 type (
 	//ClientPool holds active clients pool to manage pub/sub
 	ClientPool []*Client
