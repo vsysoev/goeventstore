@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/docker/docker/pkg/pubsub"
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
 	"github.com/vsysoev/goeventstore/wsock"
@@ -34,8 +35,9 @@ type (
 
 	// ClientWithFilter stores pointer to client and params
 	ClientWithFilter struct {
-		client *wsock.Client
-		filter map[int]bool
+		client        *wsock.Client
+		filter        map[int]bool
+		updateChannel chan interface{}
 	}
 	// ClientSlice define type for store clients connected
 	ClientSlice []*ClientWithFilter
@@ -137,7 +139,7 @@ func scalarHandler(ctx context.Context, msgs []interface{}) {
 			} else {
 				sState.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 			}
-			ctx.Value("stateUpdateChannel").(chan *bson.M) <- &(vV)
+			ctx.Value("stateUpdate").(*pubsub.Publisher).Publish(vV)
 			break
 		}
 	}
@@ -154,12 +156,14 @@ func handleClient(ctx context.Context) {
 	)
 	c.client = ctx.Value("client").(*wsock.Client)
 	c.filter = make(map[int]bool, 0)
+	c.updateChannel = ctx.Value("stateUpdate").(*pubsub.Publisher).Subscribe()
 	fromWS, toWS, doneCh := c.client.GetChannels()
 Loop:
 	for {
 		select {
 		case <-doneCh:
 			log.Println("doneCh in handleClient")
+			ctx.Value("stateUpdate").(*pubsub.Publisher).Evict(c.updateChannel)
 			break Loop
 		case msg := <-fromWS:
 			log.Println("Message from WebSocket ", msg)
@@ -201,19 +205,19 @@ Loop:
 				}
 			}
 			break
-		case stateMsg := <-ctx.Value("stateUpdateChannel").(chan *bson.M):
+		case stateMsg := <-c.updateChannel:
 			var (
 				bID, vID int
 				ok       bool
 			)
 			log.Println(stateMsg)
-			bID, ok = (*stateMsg)["event"].(bson.M)["box_id"].(int)
+			bID, ok = ((stateMsg).(bson.M))["event"].(bson.M)["box_id"].(int)
 			if !ok {
-				bID = int((*stateMsg)["event"].(bson.M)["box_id"].(float64))
+				bID = int(((stateMsg).(bson.M))["event"].(bson.M)["box_id"].(float64))
 			}
-			vID, ok = (*stateMsg)["event"].(bson.M)["var_id"].(int)
+			vID, ok = ((stateMsg).(bson.M))["event"].(bson.M)["var_id"].(int)
 			if !ok {
-				bID = int((*stateMsg)["event"].(bson.M)["var_id"].(float64))
+				bID = int(((stateMsg).(bson.M))["event"].(bson.M)["var_id"].(float64))
 			}
 			flID := bID<<16 + vID
 			if _, ok := c.filter[flID]; ok {
@@ -224,6 +228,7 @@ Loop:
 
 			break
 		case <-ctx.Done():
+			ctx.Value("stateUpdate").(*pubsub.Publisher).Evict(c.updateChannel)
 			log.Println("Context closed")
 			break Loop
 		}
@@ -260,13 +265,14 @@ Loop:
 				}
 			}
 			break
-		case msg := <-ctx.Value("stateUpdateChannel").(chan *bson.M):
-			out := wsock.MessageT{}
-			out["state"] = msg
-			for _, v := range clients {
-				_, toWS, _ := v.client.GetChannels()
-				toWS <- &out
-			}
+			/*		case msg := <-ctx.Value("stateUpdateChannel").(chan *bson.M):
+					out := wsock.MessageT{}
+					out["state"] = msg
+					for _, v := range clients {
+						_, toWS, _ := v.client.GetChannels()
+						toWS <- &out
+					}
+			*/
 		}
 	}
 	log.Println("processClientConnection exited")
@@ -290,13 +296,13 @@ func main() {
 	sState.state = make(map[int]map[int]*bson.M)
 	sState.mx = &sync.Mutex{}
 	isCurrent = false
-	stateUpdateChannel := make(chan *bson.M, 256)
+	stateUpdate := pubsub.NewPublisher(time.Millisecond*100, 1024)
 	err = evStore.Listenner2().Subscribe2("scalar", scalarHandler)
 	if err != nil {
 		log.Fatalln("Error subscribing for changes", err)
 	}
 	ctx1, cancel := context.WithCancel(context.Background())
-	ctx := context.WithValue(ctx1, "stateUpdateChannel", stateUpdateChannel)
+	ctx := context.WithValue(ctx1, "stateUpdate", stateUpdate)
 	defer cancel()
 	sState.lastID = evStore.Listenner2().GetLastID()
 	log.Println("Before Listen call")
