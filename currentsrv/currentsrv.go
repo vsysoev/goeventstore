@@ -37,7 +37,13 @@ type (
 		mx     *sync.Mutex
 		lastID string
 	}
-
+	// ScalarEvent used for unmarshalling with correct types
+	ScalarEvent struct {
+		datestamp int
+		boxID     int
+		varID     int
+		value     float32
+	}
 	// ClientWithFilter stores pointer to client and params
 	ClientWithFilter struct {
 		client        *wsock.Client
@@ -183,7 +189,7 @@ Loop:
 							if varID, ok := fltr.(map[string]interface{})["var_id"]; ok {
 								val := int(boxID.(float64))<<16 + int(varID.(float64))
 								c.filter[val] = true
-								log.Println(c.filter)
+								log.Println("Added filter to array ", boxID, varID, val)
 								if isCurrent {
 									log.Println(sState.state)
 									for boxID, box := range sState.state {
@@ -214,16 +220,17 @@ Loop:
 				bID, vID int
 				ok       bool
 			)
-			log.Println(stateMsg)
+			log.Println("Message update ", stateMsg)
 			bID, ok = ((stateMsg).(bson.M))["event"].(bson.M)["box_id"].(int)
 			if !ok {
 				bID = int(((stateMsg).(bson.M))["event"].(bson.M)["box_id"].(float64))
 			}
 			vID, ok = ((stateMsg).(bson.M))["event"].(bson.M)["var_id"].(int)
 			if !ok {
-				bID = int(((stateMsg).(bson.M))["event"].(bson.M)["var_id"].(float64))
+				vID = int(((stateMsg).(bson.M))["event"].(bson.M)["var_id"].(float64))
 			}
 			flID := bID<<16 + vID
+			log.Println("Filter", bID, vID, flID)
 			if _, ok := c.filter[flID]; ok {
 				m := wsock.MessageT{}
 				m["msg"] = stateMsg
