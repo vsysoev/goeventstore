@@ -87,8 +87,7 @@ Loop:
 			break Loop
 		case <-time.After(time.Duration(mode["delay"].(float64)) * time.Millisecond):
 			value, m = genValue(m)
-			event := "{\"datastamp\":" + strconv.FormatInt(time.Now().Unix(), 10)
-			event = event + ", \"box_id\":" + strconv.FormatInt(int64(mode["box_id"].(float64)), 10)
+			event := "{ \"box_id\":" + strconv.FormatInt(int64(mode["box_id"].(float64)), 10)
 			event = event + ", \"var_id\":" + strconv.FormatInt(int64(mode["var_id"].(float64)), 10)
 			event = event + ", \"value\":" + strconv.FormatFloat(value, 'f', 5, 32) + "}"
 			chanOutput <- event

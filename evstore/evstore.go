@@ -147,9 +147,13 @@ func (c *CommitterT) SubmitEvent(sequenceID string, tag string, eventJSON string
 		log.Println(err)
 		return err
 	}
+	//	nowString := time.Now().Format(time.RFC3339Nano)
+	// := map[string]interface{}{"$date": nowString}
 	event := make(map[string]interface{})
 	event["sequenceID"] = sequenceID
 	event["tag"] = tag
+	//	event["datestamp"] = datestamp
+	event["timestamp"] = time.Now()
 	event["event"] = object
 	err = c.c.session.DB(c.c.dbName).C(c.c.stream).Insert(event)
 	if err != nil {
@@ -169,6 +173,7 @@ func (c *CommitterT) SubmitMapStringEvent(sequenceID string, tag string, body ma
 	event["sequenceID"] = sequenceID
 	event["tag"] = tag
 	event["event"] = body
+	event["timestamp"] = time.Now()
 	err := c.c.session.DB(c.c.dbName).C(c.c.stream).Insert(event)
 	if err != nil {
 		log.Println(err)
