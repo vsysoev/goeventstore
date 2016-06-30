@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/docker/docker/pkg/pubsub"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
@@ -79,8 +80,8 @@ func TestScalarHandler(t *testing.T) {
 		sState = ScalarState{}
 		sState.state = make(map[int]map[int]*bson.M)
 		sState.mx = &sync.Mutex{}
-		stateUpdateChannel := make(chan *bson.M, 256)
-		ctx := context.WithValue(context.Background(), "stateUpdateChannel", stateUpdateChannel)
+		stateUpdateChannel := pubsub.NewPublisher(time.Millisecond*100, 1024)
+		ctx := context.WithValue(context.Background(), "stateUpdate", stateUpdateChannel)
 		id := bson.NewObjectId()
 		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": 1, "var_id": 1, "value": 1.5}}
 		msgs = append(msgs, msg)
@@ -93,8 +94,8 @@ func TestScalarHandler(t *testing.T) {
 		sState = ScalarState{}
 		sState.state = make(map[int]map[int]*bson.M)
 		sState.mx = &sync.Mutex{}
-		stateUpdateChannel := make(chan *bson.M, 256)
-		ctx := context.WithValue(context.Background(), "stateUpdateChannel", stateUpdateChannel)
+		stateUpdateChannel := pubsub.NewPublisher(time.Millisecond*100, 1024)
+		ctx := context.WithValue(context.Background(), "stateUpdate", stateUpdateChannel)
 		id := bson.NewObjectId()
 		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": 1.0, "var_id": 1.0, "value": 1.5}}
 		msgs = append(msgs, msg)
