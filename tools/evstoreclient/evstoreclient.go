@@ -21,7 +21,7 @@ import (
 	"github.com/vsysoev/goeventstore/evstore"
 )
 
-func send2EventStore(r *bufio.Reader, evStore *evstore.Connection) {
+func send2EventStore(r *bufio.Reader, evStore evstore.Connection) {
 	for {
 		s, _, err := r.ReadLine()
 		if err == io.EOF {
@@ -95,7 +95,7 @@ Loop:
 		}
 	}
 }
-func genDataFromGenFile(ctx context.Context, genFile *bufio.Reader, evStore *evstore.Connection) {
+func genDataFromGenFile(ctx context.Context, genFile *bufio.Reader, evStore evstore.Connection) {
 	chanInput := make(chan string, 1)
 	for {
 		s, _, err := genFile.ReadLine()

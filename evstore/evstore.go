@@ -20,7 +20,7 @@ const (
 
 type (
 	// Connection exports mondodb connection attributes
-	Connection struct {
+	ConnectionT struct {
 		session       *mgo.Session
 		dbName        string
 		stream        string
@@ -32,11 +32,11 @@ type (
 	}
 	// CommitterT exports Committer interface
 	CommitterT struct {
-		c *Connection
+		c *ConnectionT
 	}
 	// ListennerT export Listenner interface
 	ListennerT struct {
-		c      *Connection
+		c      *ConnectionT
 		filter map[string]Handler
 		stream string
 		done   chan bool
@@ -44,12 +44,12 @@ type (
 	}
 	// ManageT struct for Manage interface
 	ManageT struct {
-		c *Connection
+		c *ConnectionT
 	}
 
 	// QueryT struct for Query interface
 	QueryT struct {
-		c *Connection
+		c *ConnectionT
 	}
 
 	// Committer interface defines method to commit new event to eventstore
@@ -83,7 +83,16 @@ type (
 	//Query interface to support query from database
 	Query interface {
 		//Find - return channel with JSON database
-		Find(queryParam string) (chan string, error)
+		Find(queryParam string, sortOrder string) (chan string, error)
+	}
+	//Connection interface
+	Connection interface {
+		Committer() Committer
+		Listenner() Listenner
+		Listenner2() Listenner2
+		Manager() Manager
+		Query() Query
+		Close()
 	}
 )
 
@@ -91,9 +100,9 @@ type (
 // url - path to the mongodb server for ex. mongodb://127.0.0.1
 // dbName - database name where events are stored
 // stream - collection name where events are stored. EventSourcing stream
-func Dial(url string, dbName string, stream string) (*Connection, error) {
+func Dial(url string, dbName string, stream string) (Connection, error) {
 	var err error
-	c := Connection{}
+	c := ConnectionT{}
 	c.session, err = mgo.Dial(url)
 	if err != nil {
 		return nil, err
@@ -124,17 +133,17 @@ func Dial(url string, dbName string, stream string) (*Connection, error) {
 }
 
 // Close closes connection to event store
-func (c *Connection) Close() {
+func (c *ConnectionT) Close() {
 	c.session.Close()
 }
 
 // Committer return committer object which implement Committer interface
-func (c *Connection) Committer() Committer {
+func (c *ConnectionT) Committer() Committer {
 	return c.c
 }
 
 // Listenner returns listenner object which implments Listenner interface
-func (c *Connection) Listenner() Listenner {
+func (c *ConnectionT) Listenner() Listenner {
 	c.l.wg = &sync.WaitGroup{}
 	return c.l
 }
@@ -187,7 +196,7 @@ func (c *CommitterT) SubmitMapStringEvent(sequenceID string, tag string, body ma
 }
 
 // ReadEvents Read JSON events started from fromId to slice of strings
-func (c *Connection) readEvents(fromID string) (*mgo.Iter, error) {
+func (c *ConnectionT) readEvents(fromID string) (*mgo.Iter, error) {
 	var (
 		iter *mgo.Iter
 	)
@@ -296,7 +305,7 @@ func (e *ListennerT) Unsubscribe(eventChannel chan string) {
 }
 
 // Listenner2 - new implementation of listenner function. Will replace Listenner
-func (c *Connection) Listenner2() Listenner2 {
+func (c *ConnectionT) Listenner2() Listenner2 {
 	c.l.wg = &sync.WaitGroup{}
 	return c.l
 }
@@ -346,7 +355,7 @@ func (e *ListennerT) Listen(ctx context.Context, id string) error {
 	<-ctx.Done()
 	return nil
 }
-func (c *Connection) readEventsLimit(filter string, fromID string, limit int) ([]interface{}, error) {
+func (c *ConnectionT) readEventsLimit(filter string, fromID string, limit int) ([]interface{}, error) {
 	var (
 		err    error
 		result []interface{}
@@ -405,7 +414,7 @@ func contains(col []string, target string) bool {
 }
 
 // Manager - returns Manager interface
-func (c *Connection) Manager() Manager {
+func (c *ConnectionT) Manager() Manager {
 	return c.m
 }
 
@@ -414,19 +423,40 @@ func (m *ManageT) DropDatabase(databaseName string) error {
 	return m.c.session.DB(databaseName).DropDatabase()
 }
 
+func (c *ConnectionT) Query() Query {
+	return c.q
+}
+
 // Query request data from database
-func (q *QueryT) Query(queryParam string) chan string {
+func (q *QueryT) Find(queryParam string, sortOrder string) (chan string, error) {
+	var (
+		qp interface{}
+	)
 	ch := make(chan string, 256)
+	err := json.Unmarshal([]byte(queryParam), &qp)
+	if err != nil {
+		return nil, err
+	}
 
 	go func() {
-		var result []interface{}
+		var (
+			result interface{}
+			iter   *mgo.Iter
+		)
 		defer close(ch)
-		err := q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).All(&result)
-		if err != nil {
+		log.Println(q.c.dbName, q.c.stream, queryParam, sortOrder)
+		if sortOrder != "" {
+			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(qp).Sort(sortOrder).Iter()
+		} else {
+			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(qp).Iter()
+		}
+		defer iter.Close()
+		if iter.Err() != nil {
+			ch <- iter.Err().Error()
 			return
 		}
-		for _, v := range result {
-			s, err := json.Marshal(v)
+		for iter.Next(&result) {
+			s, err := json.Marshal(result)
 			if err != nil {
 				ch <- err.Error()
 				return
@@ -435,5 +465,5 @@ func (q *QueryT) Query(queryParam string) chan string {
 		}
 	}()
 
-	return ch
+	return ch, nil
 }

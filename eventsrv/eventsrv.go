@@ -36,7 +36,7 @@ func messageHandler(ctx context.Context, msg []interface{}) {
 	log.Println("Msg sent")
 }
 
-func clientHandler(ctx context.Context, c *wsock.Client, evStore *evstore.Connection) {
+func clientHandler(ctx context.Context, c *wsock.Client, evStore evstore.Connection) {
 	var (
 		err error
 	)
@@ -73,7 +73,7 @@ Loop:
 	log.Println("Exit clientProcessor")
 }
 
-func processClientConnection(s *wsock.Server, evStore *evstore.Connection) {
+func processClientConnection(s *wsock.Server, evStore evstore.Connection) {
 	log.Println("Enter processClientConnection")
 	addCh, delCh, doneCh, _ := s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)

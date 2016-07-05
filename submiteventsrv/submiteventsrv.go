@@ -25,7 +25,7 @@ type (
 	Connector wsock.Connector
 )
 
-func handleClientRequest(ctx context.Context, c Connector, e *evstore.Connection) {
+func handleClientRequest(ctx context.Context, c Connector, e evstore.Connection) {
 	var ev map[string]interface{}
 	fromWS, toWS, doneCh := c.GetChannels()
 Loop:

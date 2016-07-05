@@ -25,19 +25,34 @@ const (
 type (
 	// RPCFunction struct to process query
 	RPCFunction struct {
-		evStore *evstore.Connection
+		evStore evstore.Connection
+	}
+	RPCFunctionInterface interface {
+		GetFunction(funcName string) (interface{}, error)
 	}
 )
 
+func NewRPCFunctionInterface(e evstore.Connection) RPCFunctionInterface {
+	return &RPCFunction{e}
+}
+
+func (f *RPCFunction) GetFunction(funcName string) (interface{}, error) {
+	m := reflect.ValueOf(f).MethodByName(funcName)
+	if !m.IsValid() {
+		return nil, errors.New("No function found " + funcName)
+	}
+	return m.Interface(), nil
+}
+
 // FindLastEvent - returns last event with appropriate type
-func (f *RPCFunction) FindLastEvent(params string) (chan string, error) {
+func (f *RPCFunction) FindLastEvent() (chan string, error) {
 	log.Println("FindLastEvent Called")
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
-	//	ch, err := f.evStore.Query().
-	//	return ch, err
-	return nil, errors.New("Not implmented")
+	sortOrder := "-$natural"
+	ch, err := f.evStore.Query().Find("{}", sortOrder)
+	return ch, err
 }
 
 func (f *RPCFunction) Echo(params []interface{}) (interface{}, error) {

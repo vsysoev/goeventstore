@@ -209,6 +209,28 @@ func TestListen2Interface(t *testing.T) {
 
 	})
 }
+func TestQueryInterface(t *testing.T) {
+	Convey("When publish 2 messages", t, func() {
+		var m map[string]interface{}
+		evStore, err := Dial("localhost", "test", "test")
+		So(err, ShouldBeNil)
+		evStore.Manager().DropDatabase("test")
+		notExpected := "{\"message\":\"NOT expected\"}"
+		expected := "{\"message\":\"expected\"}"
+		evStore.Committer().SubmitEvent("", "test", notExpected)
+		evStore.Committer().SubmitEvent("", "test", expected)
+		c, err := evStore.Query().Find("{}", "-$natural")
+		So(err, ShouldBeNil)
+		So(c, ShouldNotBeNil)
+		msg, ok := <-c
+		if !ok {
+			t.Fatal("No message returned. Channel closed")
+		}
+		err = json.Unmarshal([]byte(msg), &m)
+		So(err, ShouldBeNil)
+		So(m["event"].(map[string]interface{})["message"], ShouldEqual, "expected")
+	})
+}
 func sampleHandler(ctx context.Context, events []interface{}) {
 	for _, event := range events {
 		log.Println(event)

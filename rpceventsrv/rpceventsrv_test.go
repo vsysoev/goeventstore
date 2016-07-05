@@ -1,9 +1,84 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"log"
 	"testing"
+
+	"golang.org/x/net/context"
+
+	"github.com/vsysoev/goeventstore/evstore"
 )
+
+type (
+	fakeDB         struct{}
+	fakeCommitter  struct{}
+	fakeListenner  struct{}
+	fakeListenner2 struct{}
+	fakeManager    struct{}
+	fakeQuery      struct{}
+)
+
+func NewFakeDB() (evstore.Connection, error) {
+	return &fakeDB{}, nil
+}
+
+func NewFailedFakeDB() (evstore.Connection, error) {
+	return nil, errors.New("FakeDB Failed to connect")
+}
+func (f *fakeDB) Committer() evstore.Committer {
+	return &fakeCommitter{}
+}
+func (f *fakeDB) Listenner() evstore.Listenner {
+	return &fakeListenner{}
+}
+func (f *fakeDB) Listenner2() evstore.Listenner2 {
+	return &fakeListenner2{}
+}
+func (f *fakeDB) Manager() evstore.Manager {
+	return &fakeManager{}
+}
+func (f *fakeDB) Query() evstore.Query {
+	return &fakeQuery{}
+}
+func (f *fakeDB) Close() {
+
+}
+func (f *fakeCommitter) SubmitEvent(sequenceID string, tag string, eventJSON string) error {
+	return errors.New("Not implemented")
+}
+func (f *fakeCommitter) SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error {
+	return errors.New("Not implemented")
+}
+
+func (f *fakeListenner) Subscribe(fromID string) (chan string, error) {
+	return nil, errors.New("Not implemented")
+}
+func (f *fakeListenner) Unsubscribe(eventChannel chan string) {
+
+}
+
+func (f *fakeListenner2) Subscribe2(eventTypes string, handlerFunc evstore.Handler) error {
+	return errors.New("Not implemented")
+}
+func (f *fakeListenner2) Unsubscribe2(eventTypes string) {
+
+}
+func (f *fakeListenner2) GetLastID() string {
+	return "Not implemented"
+}
+func (f *fakeListenner2) Listen(ctx context.Context, id string) error {
+	return errors.New("Not implemented")
+}
+
+func (f *fakeManager) DropDatabase(databaseName string) error {
+	return errors.New("Not implemented")
+}
+
+func (f *fakeQuery) Find(params string, sortOrder string) (chan string, error) {
+	return nil, errors.New("Not implemented")
+}
 
 func TestNilEventStore(t *testing.T) {
 	var (
@@ -15,16 +90,135 @@ func TestNilEventStore(t *testing.T) {
 	}
 }
 
-/*
-func TestGetLastEvent(t *testing.T) {
-	var rpc RPCFunction
-
-	ch, err := rpc.FindLastEvent("")
+func TestNewRPCFunctionInterface(t *testing.T) {
+	c, err := evstore.Dial("localhost", "test", "test")
+	if err != nil {
+		t.Fatal("Error connecting to evstore")
+	}
+	rpc := NewRPCFunctionInterface(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ch == nil {
-		t.Fatal("Channel is nil")
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
 	}
 }
-*/
+
+func TestNegativeNewRPCFunctionInterface(t *testing.T) {
+	evStore, err := NewFailedFakeDB()
+	if err == nil {
+		t.Fatal("Should be an error")
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+}
+
+func TestGetFunction(t *testing.T) {
+	evStore, err := evstore.Dial("localhost", "test", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("Echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+}
+func TestNegativeGetFunction(t *testing.T) {
+	evStore, err := evstore.Dial("localhost", "test", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("EchoFake")
+	if err == nil {
+		t.Fatal(err)
+	}
+	if f != nil {
+		t.Fatal("Function isn't nil")
+	}
+}
+
+func TestFailedGetLastEvent(t *testing.T) {
+	rpc := NewRPCFunctionInterface(nil)
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("FindLastEvent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	_, err = (f.(func() (chan string, error)))()
+	if err == nil {
+		t.Fatal("Should be an error")
+	}
+	if err.Error() != "EventStore isn't connected" {
+		t.Fatal(err)
+	}
+}
+func TestGetLastEvent(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := evstore.Dial("localhost", "test", "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("FindLastEvent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	evStore.Manager().DropDatabase("test")
+	notExpected := "{\"message\":\"NOT expected\"}"
+	expected := "{\"message\":\"expected\"}"
+	evStore.Committer().SubmitEvent("", "test", notExpected)
+	evStore.Committer().SubmitEvent("", "test", expected)
+	c, err := f.(func() (chan string, error))()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msg, ok := <-c
+	if !ok {
+		t.Fatal("No message returned. Channel closed")
+	}
+	err = json.Unmarshal([]byte(msg), &m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m["event"].(map[string]interface{})["message"] != "expected" {
+		t.FailNow()
+	}
+}
