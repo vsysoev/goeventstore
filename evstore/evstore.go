@@ -83,7 +83,8 @@ type (
 	//Query interface to support query from database
 	Query interface {
 		//Find - return channel with JSON database
-		Find(queryParam string, sortOrder string) (chan string, error)
+		Find(queryParam interface{}, sortOrder string) (chan string, error)
+		Pipe(interface{}) (chan string, error)
 	}
 	//Connection interface
 	Connection interface {
@@ -428,15 +429,8 @@ func (c *ConnectionT) Query() Query {
 }
 
 // Query request data from database
-func (q *QueryT) Find(queryParam string, sortOrder string) (chan string, error) {
-	var (
-		qp interface{}
-	)
+func (q *QueryT) Find(queryParam interface{}, sortOrder string) (chan string, error) {
 	ch := make(chan string, 256)
-	err := json.Unmarshal([]byte(queryParam), &qp)
-	if err != nil {
-		return nil, err
-	}
 
 	go func() {
 		var (
@@ -444,12 +438,43 @@ func (q *QueryT) Find(queryParam string, sortOrder string) (chan string, error) 
 			iter   *mgo.Iter
 		)
 		defer close(ch)
-		log.Println(q.c.dbName, q.c.stream, queryParam, sortOrder)
 		if sortOrder != "" {
-			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(qp).Sort(sortOrder).Iter()
+			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).Sort(sortOrder).Iter()
 		} else {
-			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(qp).Iter()
+			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).Iter()
 		}
+		if iter == nil {
+			return
+		}
+		defer iter.Close()
+		if iter.Err() != nil {
+			ch <- iter.Err().Error()
+			return
+		}
+		for iter.Next(&result) {
+			s, err := json.Marshal(result)
+			if err != nil {
+				ch <- err.Error()
+				return
+			}
+			ch <- string(s)
+			log.Println("Evstore sent: ", string(s))
+		}
+		log.Println("Find channel closed")
+	}()
+
+	return ch, nil
+}
+func (q *QueryT) Pipe(aggregationPipeline interface{}) (chan string, error) {
+	ch := make(chan string, 256)
+
+	go func() {
+		var (
+			result interface{}
+			iter   *mgo.Iter
+		)
+		defer close(ch)
+		iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Pipe(aggregationPipeline).Iter()
 		defer iter.Close()
 		if iter.Err() != nil {
 			ch <- iter.Err().Error()

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -30,6 +31,18 @@ type (
 	RPCFunctionInterface interface {
 		GetFunction(funcName string) (interface{}, error)
 	}
+	MessageStruct struct {
+		Timestamp time.Time   `json:"timestamp"`
+		Tag       string      `json:"tag"`
+		Event     interface{} `json:"event"`
+	}
+	OnePoint struct {
+		Timestamp      time.Time `json:"timestamp"`
+		NumberOfPoints int       `json:"numofpoints"`
+		Min            float64   `json:"min"`
+		Max            float64   `json:"max"`
+		Avg            float64   `json:"avg"`
+	}
 )
 
 func NewRPCFunctionInterface(e evstore.Connection) RPCFunctionInterface {
@@ -46,13 +59,104 @@ func (f *RPCFunction) GetFunction(funcName string) (interface{}, error) {
 
 // FindLastEvent - returns last event with appropriate type
 func (f *RPCFunction) FindLastEvent() (chan string, error) {
-	log.Println("FindLastEvent Called")
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "-$natural"
-	ch, err := f.evStore.Query().Find("{}", sortOrder)
+	ch, err := f.evStore.Query().Find(nil, sortOrder)
 	return ch, err
+}
+
+func (f *RPCFunction) GetHistory(from time.Time, to time.Time) (chan string, error) {
+	if f.evStore == nil {
+		return nil, errors.New("EventStore isn't connected")
+	}
+	sortOrder := "$natural"
+	requestParameter := make(map[string]interface{})
+	requestParameter["timestamp"] = make(map[string]interface{})
+	requestParameter["timestamp"].(map[string]interface{})["$gt"] = from
+	requestParameter["timestamp"].(map[string]interface{})["$lt"] = to
+	log.Println(requestParameter)
+	ch, err := f.evStore.Query().Find(requestParameter, sortOrder)
+	return ch, err
+
+}
+
+func (f *RPCFunction) GetDistanceValue(from time.Time, to time.Time, numberOfPoints int) (chan string, error) {
+	if f.evStore == nil {
+		return nil, errors.New("EventStore isn't connected")
+	}
+	if numberOfPoints <= 0 {
+		return nil, errors.New("numberOfPoints should be positive integer")
+	}
+	log.Println(to.Before(from))
+	if !from.Before(to) {
+		return nil, errors.New("To must be greater than From")
+	}
+
+	nanosecondsInOneInterval := to.Sub(from) / time.Duration(numberOfPoints)
+	currentPoint := to
+	sortOrder := "-$natural"
+	requestParameter := make(map[string]interface{})
+	requestParameter["timestamp"] = make(map[string]interface{})
+	requestParameter["timestamp"].(map[string]interface{})["$lt"] = to
+	ch, err := f.evStore.Query().Find(requestParameter, sortOrder)
+	if err != nil {
+		return nil, err
+	}
+	ch_out := make(chan string, 256)
+	currentPoint = currentPoint.Add(-nanosecondsInOneInterval)
+	points := make([]OnePoint, numberOfPoints)
+	currentPointIndex := numberOfPoints - 1
+	go func() {
+		for {
+			s := <-ch
+			if s == "" {
+				break
+			}
+			m := MessageStruct{}
+			err := json.Unmarshal([]byte(s), &m)
+			if err != nil {
+				break
+			}
+			for {
+				processSameMessage := false
+				if m.Tag == "scalar" {
+					if currentPoint.Before(m.Timestamp) {
+						if points[currentPointIndex].Min > m.Event.(map[string]interface{})["value"].(float64) || points[currentPointIndex].NumberOfPoints == 0 {
+							points[currentPointIndex].Min = m.Event.(map[string]interface{})["value"].(float64)
+						}
+						if points[currentPointIndex].Max < m.Event.(map[string]interface{})["value"].(float64) || points[currentPointIndex].NumberOfPoints == 0 {
+							points[currentPointIndex].Max = m.Event.(map[string]interface{})["value"].(float64)
+						}
+						points[currentPointIndex].Avg = points[currentPointIndex].Avg + m.Event.(map[string]interface{})["value"].(float64)
+						points[currentPointIndex].NumberOfPoints = points[currentPointIndex].NumberOfPoints + 1
+					} else {
+						points[currentPointIndex].Avg = points[currentPointIndex].Avg / float64(points[currentPointIndex].NumberOfPoints)
+						points[currentPointIndex].Timestamp = currentPoint
+						currentPoint = currentPoint.Add(-nanosecondsInOneInterval)
+						currentPointIndex = currentPointIndex - 1
+						processSameMessage = true
+					}
+				}
+				if !processSameMessage {
+					break
+				}
+			}
+		}
+		points[currentPointIndex].Timestamp = currentPoint
+		points[currentPointIndex].Avg = points[currentPointIndex].Avg / float64(points[currentPointIndex].NumberOfPoints)
+		for n := range points {
+			//			log.Println("Dump points ", points[n])
+			tmpOut, err := json.Marshal(&points[n])
+			if err != nil {
+				break
+			}
+			ch_out <- string(tmpOut)
+		}
+		close(ch_out)
+	}()
+	return ch_out, err
 }
 
 func (f *RPCFunction) Echo(params []interface{}) (interface{}, error) {

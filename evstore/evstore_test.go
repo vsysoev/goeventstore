@@ -11,6 +11,7 @@ import (
 	"golang.org/x/net/context"
 
 	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/vsysoev/goeventstore/property"
@@ -210,7 +211,34 @@ func TestListen2Interface(t *testing.T) {
 	})
 }
 func TestQueryInterface(t *testing.T) {
-	Convey("When publish 2 messages", t, func() {
+	Convey("When publish 100 messages", t, func() {
+		var m map[string]interface{}
+		evStore, err := Dial("localhost", "test", "test")
+		So(err, ShouldBeNil)
+		evStore.Manager().DropDatabase("test")
+		for i := 0; i < 100; i++ {
+			expected := "{\"message\":" + strconv.Itoa(i) + "}"
+			evStore.Committer().SubmitEvent("", "test", expected)
+		}
+		Convey("They should be published continousely. And returned in opposit order", func() {
+			c, err := evStore.Query().Find(bson.M{}, "-$natural")
+			So(err, ShouldBeNil)
+			So(c, ShouldNotBeNil)
+			messageCounter := 0
+			for {
+				msg, ok := <-c
+				if !ok {
+					break
+				}
+				err = json.Unmarshal([]byte(msg), &m)
+				So(err, ShouldBeNil)
+				So(m["event"].(map[string]interface{})["message"], ShouldEqual, 99-messageCounter)
+				messageCounter = messageCounter + 1
+			}
+			So(messageCounter, ShouldEqual, 100)
+		})
+	})
+	Convey("When requesting pipeline", t, func() {
 		var m map[string]interface{}
 		evStore, err := Dial("localhost", "test", "test")
 		So(err, ShouldBeNil)
@@ -218,8 +246,14 @@ func TestQueryInterface(t *testing.T) {
 		notExpected := "{\"message\":\"NOT expected\"}"
 		expected := "{\"message\":\"expected\"}"
 		evStore.Committer().SubmitEvent("", "test", notExpected)
+		<-time.After(200 * time.Millisecond)
+		tBegin := time.Now()
 		evStore.Committer().SubmitEvent("", "test", expected)
-		c, err := evStore.Query().Find("{}", "-$natural")
+		<-time.After(200 * time.Millisecond)
+		tEnd := time.Now()
+		fakePipeline := make([]bson.M, 1)
+		fakePipeline[0] = bson.M{"$match": bson.M{"timestamp": bson.M{"$gte": tBegin, "$lt": tEnd}}}
+		c, err := evStore.Query().Pipe(fakePipeline)
 		So(err, ShouldBeNil)
 		So(c, ShouldNotBeNil)
 		msg, ok := <-c
@@ -229,6 +263,7 @@ func TestQueryInterface(t *testing.T) {
 		err = json.Unmarshal([]byte(msg), &m)
 		So(err, ShouldBeNil)
 		So(m["event"].(map[string]interface{})["message"], ShouldEqual, "expected")
+
 	})
 }
 func sampleHandler(ctx context.Context, events []interface{}) {
