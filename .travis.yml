@@ -5,5 +5,6 @@ services:
 language: go
 before_script:
   - sleep 15
+  - mongo --version
 go:
   - 1.6.2
