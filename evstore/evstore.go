@@ -474,7 +474,10 @@ func (q *QueryT) FindOne(queryParam interface{}, sortOrder string) (chan string,
 			result interface{}
 			iter   *mgo.Iter
 		)
-		defer close(ch)
+		defer func() {
+			close(ch)
+			log.Println("Channel closed by evstore")
+		}()
 		if sortOrder != "" {
 			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).Sort(sortOrder).Limit(1).Iter()
 		} else {
