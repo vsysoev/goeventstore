@@ -479,12 +479,7 @@ func TestGetFirstEvent(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for {
-		msg, ok := <-c
-		if !ok {
-			log.Println("Read message with !ok", ok, msg)
-			break
-		}
+	for msg := range c {
 		msgCounter = msgCounter + 1
 		log.Println(msg)
 		err = json.Unmarshal([]byte(msg), &m)
@@ -544,12 +539,7 @@ func TestGetFirstEventByType(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for {
-		msg, ok := <-c
-		if !ok {
-			log.Println("Read message with !ok", ok, msg)
-			break
-		}
+	for msg := range c {
 		msgCounter = msgCounter + 1
 		err = json.Unmarshal([]byte(msg), &m)
 		if err != nil {
