@@ -1,6 +1,4 @@
 sudo: required
-services:
-  - mongodb
 
 language: go
 before_script:
@@ -8,3 +6,11 @@ before_script:
   - mongo --version
 go:
   - 1.6.2
+addons:
+  apt:
+    sources:
+      - mongodb-upstart
+      - mongodb-3.0-precise
+    packages:
+      - mongodb-org-server
+      - mongodb-org-shell
