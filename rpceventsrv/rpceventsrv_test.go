@@ -470,7 +470,6 @@ func TestGetFirstEvent(t *testing.T) {
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "test", msg2)
-		fmt.Print(".")
 	}
 	c, err := f.(func(tag string) (chan string, error))("test")
 	if err != nil {
@@ -480,7 +479,6 @@ func TestGetFirstEvent(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	log.Println("Before start reading message from channel")
 	for msg := range c {
 		msgCounter = msgCounter + 1
 		log.Println(msg)
@@ -541,7 +539,6 @@ func TestGetFirstEventByType(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	log.Println("Before start reading message from channel")
 	for msg := range c {
 		msgCounter = msgCounter + 1
 		err = json.Unmarshal([]byte(msg), &m)
