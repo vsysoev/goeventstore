@@ -14,6 +14,8 @@ import (
 	"github.com/vsysoev/goeventstore/evstore"
 )
 
+const dbName string = "rpceventsrv_test"
+
 type (
 	fakeDB         struct{}
 	fakeCommitter  struct{}
@@ -83,6 +85,10 @@ func (f *fakeQuery) Find(params interface{}, sortOrder string) (chan string, err
 	return nil, errors.New("Not implemented")
 }
 
+func (f *fakeQuery) FindOne(params interface{}, sortOrder string) (chan string, error) {
+	return nil, errors.New("Not implemented")
+}
+
 func (f *fakeQuery) Pipe(fakePipeline interface{}) (chan string, error) {
 	return nil, errors.New("Not implemented")
 }
@@ -97,7 +103,7 @@ func TestNilEventStore(t *testing.T) {
 }
 
 func TestNewRPCFunctionInterface(t *testing.T) {
-	c, err := evstore.Dial("localhost", "test", "test")
+	c, err := evstore.Dial("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal("Error connecting to evstore")
 	}
@@ -122,7 +128,7 @@ func TestNegativeNewRPCFunctionInterface(t *testing.T) {
 }
 
 func TestGetFunction(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", "test", "test")
+	evStore, err := evstore.Dial("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +148,7 @@ func TestGetFunction(t *testing.T) {
 	}
 }
 func TestNegativeGetFunction(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", "test", "test")
+	evStore, err := evstore.Dial("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +192,7 @@ func TestGetLastEvent(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", "test", "test")
+	evStore, err := evstore.Dial("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +210,7 @@ func TestGetLastEvent(t *testing.T) {
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase("test")
+	evStore.Manager().DropDatabase(dbName)
 	notExpected := "{\"message\":\"NOT expected\"}"
 	expected := "{\"message\":\"expected\"}"
 	evStore.Committer().SubmitEvent("", "test", notExpected)
@@ -233,7 +239,7 @@ func TestGetHistory(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", "test", "test")
+	evStore, err := evstore.Dial("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +257,7 @@ func TestGetHistory(t *testing.T) {
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase("test")
+	evStore.Manager().DropDatabase(dbName)
 	msg1 := "{\"message\":\"NOT expected\"}"
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	<-time.After(2 * time.Second)
@@ -289,7 +295,7 @@ func TestGetHistory(t *testing.T) {
 	}
 }
 func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", "test", "test")
+	evStore, err := evstore.Dial("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +324,7 @@ func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
 }
 
 func TestGetDistanceValueIncorrectInterval(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", "test", "test")
+	evStore, err := evstore.Dial("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +352,7 @@ func TestGetDistanceValueIncorrectInterval(t *testing.T) {
 
 }
 func TestGetDistanceValueZerroInterval(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", "test", "test")
+	evStore, err := evstore.Dial("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,7 +383,7 @@ func TestGetDistanceValue(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", "test", "test")
+	evStore, err := evstore.Dial("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +401,7 @@ func TestGetDistanceValue(t *testing.T) {
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase("test")
+	evStore.Manager().DropDatabase(dbName)
 	msg1 := "{\"message\":\"NOT expected\"}"
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	<-time.After(1 * time.Second)
@@ -434,4 +440,128 @@ func TestGetDistanceValue(t *testing.T) {
 	if msgCounter == 0 {
 		t.Fatal("No message recieved from database")
 	}
+}
+
+func TestGetFirstEvent(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := evstore.Dial("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("GetFirstEvent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	evStore.Manager().DropDatabase(dbName)
+	msg1 := "{\"message\":\"First event\"}"
+	evStore.Committer().SubmitEvent("", "test", msg1)
+	for n := 0; n < 100; n++ {
+		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "scalar", msg2)
+	}
+	c, err := f.(func(tag string) (chan string, error))("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for {
+		msg, ok := <-c
+		if !ok {
+			break
+		}
+		msgCounter = msgCounter + 1
+		log.Println(msg)
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m["event"].(map[string]interface{})["message"] != "First event" {
+			t.Fatal("Incorrect message retuned: ", m["message"])
+		}
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
+
+}
+func TestGetFirstEventByType(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := evstore.Dial("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("GetFirstEvent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	evStore.Manager().DropDatabase(dbName)
+	for n := 0; n < 100; n++ {
+		msg2 := "{\"Fake event before\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "scalar", msg2)
+	}
+	msg1 := "{\"message\":\"First event of type test\"}"
+	evStore.Committer().SubmitEvent("", "test", msg1)
+	for n := 0; n < 100; n++ {
+		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "scalar", msg2)
+	}
+	c, err := f.(func(tag string) (chan string, error))("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for {
+		msg, ok := <-c
+		if !ok {
+			break
+		}
+		msgCounter = msgCounter + 1
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m["event"].(map[string]interface{})["message"] != "First event of type test" {
+			t.Fatal("Incorrect message retuned: ", m["message"])
+		}
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
+
 }

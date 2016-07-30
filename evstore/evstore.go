@@ -84,6 +84,7 @@ type (
 	Query interface {
 		//Find - return channel with JSON database
 		Find(queryParam interface{}, sortOrder string) (chan string, error)
+		FindOne(queryParam interface{}, sortOrder string) (chan string, error)
 		Pipe(interface{}) (chan string, error)
 	}
 	//Connection interface
@@ -458,9 +459,44 @@ func (q *QueryT) Find(queryParam interface{}, sortOrder string) (chan string, er
 				return
 			}
 			ch <- string(s)
-			log.Println("Evstore sent: ", string(s))
 		}
-		log.Println("Find channel closed")
+	}()
+
+	return ch, nil
+}
+
+// Query request data from database
+func (q *QueryT) FindOne(queryParam interface{}, sortOrder string) (chan string, error) {
+	ch := make(chan string, 256)
+
+	go func() {
+		var (
+			result interface{}
+			iter   *mgo.Iter
+		)
+		defer close(ch)
+		if sortOrder != "" {
+			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).Sort(sortOrder).Limit(1).Iter()
+		} else {
+			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).Limit(1).Iter()
+		}
+		if iter == nil {
+			return
+		}
+		defer iter.Close()
+		if iter.Err() != nil {
+			ch <- iter.Err().Error()
+			return
+		}
+		for iter.Next(&result) {
+			s, err := json.Marshal(result)
+			if err != nil {
+				ch <- err.Error()
+				return
+			}
+			ch <- string(s)
+			break
+		}
 	}()
 
 	return ch, nil

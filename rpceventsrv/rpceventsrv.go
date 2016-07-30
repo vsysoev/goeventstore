@@ -159,6 +159,18 @@ func (f *RPCFunction) GetDistanceValue(from time.Time, to time.Time, numberOfPoi
 	return ch_out, err
 }
 
+func (f *RPCFunction) GetFirstEvent(tag string) (chan string, error) {
+	if f.evStore == nil {
+		return nil, errors.New("EventStore isn't connected")
+	}
+	sortOrder := "$natural"
+	requestParameter := make(map[string]interface{})
+	requestParameter["tag"] = make(map[string]interface{})
+	requestParameter["tag"].(map[string]interface{})["$eq"] = tag
+	ch, err := f.evStore.Query().FindOne(requestParameter, sortOrder)
+	return ch, err
+}
+
 func (f *RPCFunction) Echo(params []interface{}) (interface{}, error) {
 
 	return params, nil
