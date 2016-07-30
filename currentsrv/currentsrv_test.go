@@ -22,6 +22,7 @@ import (
 
 const (
 	mongoURL string = "mongodb://127.0.0.1"
+	dbName   string = "currentsrv_test"
 )
 
 func Handler(ctx context.Context, msgs []interface{}) {
@@ -33,13 +34,13 @@ func TestDropDatabase(t *testing.T) {
 		session, err := mgo.Dial(props["mongodb.url"])
 		So(session, ShouldNotBeNil)
 		So(err, ShouldBeNil)
-		_ = session.DB("test").C("events_capped").DropCollection()
-		_ = session.DB("test").C("events").DropCollection()
+		_ = session.DB(dbName).C("events_capped").DropCollection()
+		_ = session.DB(dbName).C("events").DropCollection()
 	})
 }
 func TestCurrentScalarState(t *testing.T) {
 	Convey("When commit current message to database", t, func() {
-		ev, err := evstore.Dial(mongoURL, "test", "events")
+		ev, err := evstore.Dial(mongoURL, dbName, "events")
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 

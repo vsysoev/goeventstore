@@ -16,6 +16,7 @@ import (
 
 const (
 	mongoURL string = "mongodb://127.0.0.1"
+	dbName   string = "eventsrv_test"
 )
 
 func handlerTest(ctx context.Context, events []interface{}) {
@@ -26,7 +27,7 @@ func handlerTest(ctx context.Context, events []interface{}) {
 }
 func TestEventSrv(t *testing.T) {
 	Convey("When commit current message to database", t, func() {
-		ev, err := evstore.Dial(mongoURL, "test", "events")
+		ev, err := evstore.Dial(mongoURL, dbName, "events")
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 
