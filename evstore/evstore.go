@@ -498,6 +498,7 @@ func (q *QueryT) FindOne(queryParam interface{}, sortOrder string) (chan string,
 				return
 			}
 			ch <- string(s)
+			log.Println("Message sent", string(s))
 			break
 		}
 	}()
