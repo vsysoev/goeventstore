@@ -469,7 +469,8 @@ func TestGetFirstEvent(t *testing.T) {
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "scalar", msg2)
+		evStore.Committer().SubmitEvent("", "test", msg2)
+		fmt.Print(".")
 	}
 	c, err := f.(func(tag string) (chan string, error))("test")
 	if err != nil {
