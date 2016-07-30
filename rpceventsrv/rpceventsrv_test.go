@@ -482,6 +482,7 @@ func TestGetFirstEvent(t *testing.T) {
 	for {
 		msg, ok := <-c
 		if !ok {
+			log.Println("Read message with !ok", ok, msg)
 			break
 		}
 		msgCounter = msgCounter + 1
@@ -546,6 +547,7 @@ func TestGetFirstEventByType(t *testing.T) {
 	for {
 		msg, ok := <-c
 		if !ok {
+			log.Println("Read message with !ok", ok, msg)
 			break
 		}
 		msgCounter = msgCounter + 1
