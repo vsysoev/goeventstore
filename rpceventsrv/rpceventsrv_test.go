@@ -173,14 +173,14 @@ func TestFailedGetLastEvent(t *testing.T) {
 	if rpc == nil {
 		t.Fatal("RPCFunctionInterface is nil")
 	}
-	f, err := rpc.GetFunction("FindLastEvent")
+	f, err := rpc.GetFunction("GetLastEvent")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	_, err = (f.(func() (chan string, error)))()
+	_, err = (f.(func(tag string) (chan string, error)))("")
 	if err == nil {
 		t.Fatal("Should be an error")
 	}
