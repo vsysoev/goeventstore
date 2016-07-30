@@ -188,52 +188,6 @@ func TestFailedGetLastEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-func TestGetLastEvent(t *testing.T) {
-	var (
-		m map[string]interface{}
-	)
-	evStore, err := evstore.Dial("localhost", dbName, "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("FindLastEvent")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if f == nil {
-		t.Fatal("Function is nil")
-	}
-	evStore.Manager().DropDatabase(dbName)
-	notExpected := "{\"message\":\"NOT expected\"}"
-	expected := "{\"message\":\"expected\"}"
-	evStore.Committer().SubmitEvent("", "test", notExpected)
-	evStore.Committer().SubmitEvent("", "test", expected)
-	c, err := f.(func() (chan string, error))()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if c == nil {
-		t.Fatal("Channel shouldn't be nil")
-	}
-	msg, ok := <-c
-	if !ok {
-		t.Fatal("No message returned. Channel closed")
-	}
-	err = json.Unmarshal([]byte(msg), &m)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if m["event"].(map[string]interface{})["message"] != "expected" {
-		t.FailNow()
-	}
-}
 
 func TestGetHistory(t *testing.T) {
 	var (
@@ -546,6 +500,122 @@ func TestGetFirstEventByType(t *testing.T) {
 			t.Fatal(err)
 		}
 		if m["event"].(map[string]interface{})["message"] != "First event of type test" {
+			t.Fatal("Incorrect message retuned: ", m["message"])
+		}
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
+
+}
+func TestGetLastEvent(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := evstore.Dial("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("GetLastEvent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	evStore.Manager().DropDatabase(dbName)
+	msg1 := "{\"message\":\"First event\"}"
+	evStore.Committer().SubmitEvent("", "test", msg1)
+	for n := 0; n < 100; n++ {
+		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "test", msg2)
+	}
+	msgLast := "{\"message\":\"Last event\"}"
+	evStore.Committer().SubmitEvent("", "test", msgLast)
+	c, err := f.(func(tag string) (chan string, error))("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for msg := range c {
+		msgCounter = msgCounter + 1
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m["event"].(map[string]interface{})["message"] != "Last event" {
+			t.Fatal("Incorrect message retuned: ", m["message"])
+		}
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
+
+}
+func TestGetLastEventByType(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := evstore.Dial("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("GetLastEvent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	evStore.Manager().DropDatabase(dbName)
+	for n := 0; n < 100; n++ {
+		msg2 := "{\"Fake event before\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "test", msg2)
+	}
+	msg1 := "{\"message\":\"Last event of type test\"}"
+	evStore.Committer().SubmitEvent("", "test", msg1)
+	for n := 0; n < 100; n++ {
+		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "scalar", msg2)
+	}
+	c, err := f.(func(tag string) (chan string, error))("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for msg := range c {
+		msgCounter = msgCounter + 1
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m["event"].(map[string]interface{})["message"] != "Last event of type test" {
 			t.Fatal("Incorrect message retuned: ", m["message"])
 		}
 	}

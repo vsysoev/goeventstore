@@ -58,12 +58,15 @@ func (f *RPCFunction) GetFunction(funcName string) (interface{}, error) {
 }
 
 // FindLastEvent - returns last event with appropriate type
-func (f *RPCFunction) FindLastEvent() (chan string, error) {
+func (f *RPCFunction) GetLastEvent(tag string) (chan string, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "-$natural"
-	ch, err := f.evStore.Query().Find(nil, sortOrder)
+	requestParameter := make(map[string]interface{})
+	requestParameter["tag"] = make(map[string]interface{})
+	requestParameter["tag"].(map[string]interface{})["$eq"] = tag
+	ch, err := f.evStore.Query().FindOne(requestParameter, sortOrder)
 	return ch, err
 }
 
