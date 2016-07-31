@@ -166,7 +166,7 @@ func (f *RPCFunction) GetFirstEvent(tag string) (chan string, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
-	sortOrder := "-$natural"
+	sortOrder := "$natural"
 	requestParameter := make(map[string]interface{})
 	requestParameter["tag"] = make(map[string]interface{})
 	requestParameter["tag"].(map[string]interface{})["$eq"] = tag
