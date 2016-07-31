@@ -166,10 +166,27 @@ func (f *RPCFunction) GetFirstEvent(tag string) (chan string, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
-	sortOrder := "$natural"
+	sortOrder := "-$natural"
 	requestParameter := make(map[string]interface{})
 	requestParameter["tag"] = make(map[string]interface{})
 	requestParameter["tag"].(map[string]interface{})["$eq"] = tag
+	ch, err := f.evStore.Query().FindOne(requestParameter, sortOrder)
+	return ch, err
+}
+
+func (f *RPCFunction) GetEventAt(tag string, tPoint time.Time) (chan string, error) {
+	if f.evStore == nil {
+		return nil, errors.New("EventStore isn't connected")
+	}
+	sortOrder := "-$natural"
+	requestParameter := make(map[string]interface{})
+	if tag != "" {
+		requestParameter["tag"] = make(map[string]interface{})
+		requestParameter["tag"].(map[string]interface{})["$eq"] = tag
+	}
+	requestParameter["timestamp"] = make(map[string]interface{})
+	requestParameter["timestamp"].(map[string]interface{})["$lte"] = tPoint
+	log.Println(requestParameter)
 	ch, err := f.evStore.Query().FindOne(requestParameter, sortOrder)
 	return ch, err
 }

@@ -625,5 +625,132 @@ func TestGetLastEventByType(t *testing.T) {
 	if msgCounter > 1 {
 		t.Fatal("Too many messages returned", msgCounter)
 	}
+}
+func TestGetEventAt(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := evstore.Dial("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("GetEventAt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	evStore.Manager().DropDatabase(dbName)
+	msg1 := "{\"message\":\"First event\"}"
+	evStore.Committer().SubmitEvent("", "test", msg1)
+	for n := 0; n < 50; n++ {
+		msg2 := "{\"Counter\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "test", msg2)
+	}
+	tPoint := time.Now()
+	<-time.After(100 * time.Millisecond)
+	for n := 50; n < 100; n++ {
+		msg2 := "{\"Counter\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "test", msg2)
+	}
+	msgLast := "{\"message\":\"Last event\"}"
+	evStore.Committer().SubmitEvent("", "test", msgLast)
+	c, err := f.(func(tag string, timePoint time.Time) (chan string, error))("", tPoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for msg := range c {
+		log.Println(msg)
+		msgCounter = msgCounter + 1
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if int(m["event"].(map[string]interface{})["Counter"].(float64)) != 49 {
+			t.Fatal("Incorrect message retuned: ", m["event"])
+		}
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
+
+}
+func TestGetEventAtByType(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := evstore.Dial("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("GetEventAt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	evStore.Manager().DropDatabase(dbName)
+	for n := 0; n < 100; n++ {
+		msg2 := "{\"Counter\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "test", msg2)
+		evStore.Committer().SubmitEvent("", "fake", msg2)
+	}
+	tPoint := time.Now()
+	<-time.After(100 * time.Millisecond)
+	msg1 := "{\"message\":\"Last event of type test\"}"
+	evStore.Committer().SubmitEvent("", "test", msg1)
+	for n := 0; n < 100; n++ {
+		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
+		evStore.Committer().SubmitEvent("", "scalar", msg2)
+		evStore.Committer().SubmitEvent("", "test", msg2)
+	}
+	c, err := f.(func(tag string, tPoint time.Time) (chan string, error))("test", tPoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for msg := range c {
+		msgCounter = msgCounter + 1
+		log.Println(msg)
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if int(m["event"].(map[string]interface{})["Counter"].(float64)) != 99 {
+			t.Fatal("Incorrect message retuned: ", m["message"])
+		}
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
 
 }
