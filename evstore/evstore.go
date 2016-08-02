@@ -78,6 +78,7 @@ type (
 		//DropDatabase just drop database
 		//TODO:20 Remove after testing will be updated
 		DropDatabase(databaseName string) error
+		DatabaseNames() ([]string, error)
 	}
 
 	//Query interface to support query from database
@@ -423,6 +424,10 @@ func (c *ConnectionT) Manager() Manager {
 // DropDatabase - drop Mongo Database
 func (m *ManageT) DropDatabase(databaseName string) error {
 	return m.c.session.DB(databaseName).DropDatabase()
+}
+
+func (m *ManageT) DatabaseNames() ([]string, error) {
+	return m.c.session.DatabaseNames()
 }
 
 func (c *ConnectionT) Query() Query {

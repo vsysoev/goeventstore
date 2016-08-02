@@ -81,6 +81,10 @@ func (f *fakeManager) DropDatabase(databaseName string) error {
 	return errors.New("Not implemented")
 }
 
+func (f *fakeManager) DatabaseNames() ([]string, error) {
+	return nil, errors.New("Not implemented")
+}
+
 func (f *fakeQuery) Find(params interface{}, sortOrder string) (chan string, error) {
 	return nil, errors.New("Not implemented")
 }
@@ -753,4 +757,32 @@ func TestGetEventAtByType(t *testing.T) {
 		t.Fatal("Too many messages returned", msgCounter)
 	}
 
+}
+
+func TestListDatabases(t *testing.T) {
+	evStore, err := evstore.Dial("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rpc := NewRPCFunctionInterface(evStore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rpc == nil {
+		t.Fatal("RPCFunctionInterface is nil")
+	}
+	f, err := rpc.GetFunction("ListDatabases")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	dbList, err := f.(func() ([]string, error))()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dbList) == 0 {
+		t.Fatal("List should not be empty")
+	}
 }

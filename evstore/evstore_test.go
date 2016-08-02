@@ -204,6 +204,13 @@ func TestManagerInterface(t *testing.T) {
 			}
 		})
 	})
+	Convey("Check if list of existing databases not empty", t, func() {
+		ev, err := Dial(mongoURL, dbName, "test")
+		So(err, ShouldBeNil)
+		dbList, err := ev.Manager().DatabaseNames()
+		So(err, ShouldBeNil)
+		So(len(dbList), ShouldBeGreaterThan, 0)
+	})
 }
 func sampleHandler(ctx context.Context, events []interface{}) {
 	for _, event := range events {

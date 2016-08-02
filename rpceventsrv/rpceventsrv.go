@@ -191,6 +191,10 @@ func (f *RPCFunction) GetEventAt(tag string, tPoint time.Time) (chan string, err
 	return ch, err
 }
 
+func (f *RPCFunction) ListDatabases() ([]string, error) {
+	return f.evStore.Manager().DatabaseNames()
+}
+
 func (f *RPCFunction) Echo(params []interface{}) (interface{}, error) {
 
 	return params, nil
