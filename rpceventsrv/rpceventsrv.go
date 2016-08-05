@@ -58,7 +58,7 @@ func (f *RPCFunction) GetFunction(funcName string) (interface{}, error) {
 }
 
 // FindLastEvent - returns last event with appropriate type
-func (f *RPCFunction) GetLastEvent(tag string) (chan string, error) {
+func (f *RPCFunction) GetLastEvent(tag string, filter string) (chan string, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
@@ -70,7 +70,7 @@ func (f *RPCFunction) GetLastEvent(tag string) (chan string, error) {
 	return ch, err
 }
 
-func (f *RPCFunction) GetHistory(from time.Time, to time.Time) (chan string, error) {
+func (f *RPCFunction) GetHistory(tag string, from time.Time, to time.Time, filter string) (chan string, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
@@ -85,7 +85,7 @@ func (f *RPCFunction) GetHistory(from time.Time, to time.Time) (chan string, err
 
 }
 
-func (f *RPCFunction) GetDistanceValue(from time.Time, to time.Time, numberOfPoints int) (chan string, error) {
+func (f *RPCFunction) GetDistanceValue(tag string, from time.Time, to time.Time, numberOfPoints int, filter string) (chan string, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
@@ -162,7 +162,7 @@ func (f *RPCFunction) GetDistanceValue(from time.Time, to time.Time, numberOfPoi
 	return ch_out, err
 }
 
-func (f *RPCFunction) GetFirstEvent(tag string) (chan string, error) {
+func (f *RPCFunction) GetFirstEvent(tag string, filter string) (chan string, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
@@ -174,7 +174,7 @@ func (f *RPCFunction) GetFirstEvent(tag string) (chan string, error) {
 	return ch, err
 }
 
-func (f *RPCFunction) GetEventAt(tag string, tPoint time.Time) (chan string, error) {
+func (f *RPCFunction) GetEventAt(tag string, tPoint time.Time, filter string) (chan string, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}

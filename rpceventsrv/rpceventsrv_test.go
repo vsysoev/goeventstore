@@ -184,7 +184,7 @@ func TestFailedGetLastEvent(t *testing.T) {
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	_, err = (f.(func(tag string) (chan string, error)))("")
+	_, err = (f.(func(string, string) (chan string, error)))("", "")
 	if err == nil {
 		t.Fatal("Should be an error")
 	}
@@ -230,7 +230,7 @@ func TestGetHistory(t *testing.T) {
 	<-time.After(2 * time.Second)
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	log.Println(tStart, " < ", tStop)
-	c, err := f.(func(time.Time, time.Time) (chan string, error))(tStart, tStop)
+	c, err := f.(func(string, time.Time, time.Time, string) (chan string, error))("test", tStart, tStop, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
 	}
 	tStart := time.Now()
 	tStop := tStart.Add(10 * time.Second)
-	_, err = f.(func(time.Time, time.Time, int) (chan string, error))(tStart, tStop, -10)
+	_, err = f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStop, -10, "")
 	expectedError := "numberOfPoints should be positive integer"
 	if err.Error() != expectedError {
 		t.Fatal(err.Error() + " != " + expectedError)
@@ -302,7 +302,7 @@ func TestGetDistanceValueIncorrectInterval(t *testing.T) {
 	}
 	tStop := time.Now()
 	tStart := tStop.Add(10 * time.Second)
-	_, err = f.(func(time.Time, time.Time, int) (chan string, error))(tStart, tStop, 10)
+	_, err = f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStop, 10, "")
 	expectedError := "To must be greater than From"
 	if err.Error() != expectedError {
 		t.Fatal(err.Error() + " != " + expectedError)
@@ -329,7 +329,7 @@ func TestGetDistanceValueZerroInterval(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	tStart := time.Now()
-	_, err = f.(func(time.Time, time.Time, int) (chan string, error))(tStart, tStart, 10)
+	_, err = f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStart, 10, "")
 	expectedError := "To must be greater than From"
 	if err.Error() != expectedError {
 		t.Fatal(err.Error() + " != " + expectedError)
@@ -375,7 +375,7 @@ func TestGetDistanceValue(t *testing.T) {
 	<-time.After(2 * time.Second)
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	log.Println(tStart, " < ", tStop)
-	c, err := f.(func(time.Time, time.Time, int) (chan string, error))(tStart, tStop, 10)
+	c, err := f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStop, 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +429,7 @@ func TestGetFirstEvent(t *testing.T) {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "test", msg2)
 	}
-	c, err := f.(func(tag string) (chan string, error))("test")
+	c, err := f.(func(string, string) (chan string, error))("test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -489,7 +489,7 @@ func TestGetFirstEventByType(t *testing.T) {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "scalar", msg2)
 	}
-	c, err := f.(func(tag string) (chan string, error))("test")
+	c, err := f.(func(string, string) (chan string, error))("test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -546,7 +546,7 @@ func TestGetLastEvent(t *testing.T) {
 	}
 	msgLast := "{\"message\":\"Last event\"}"
 	evStore.Committer().SubmitEvent("", "test", msgLast)
-	c, err := f.(func(tag string) (chan string, error))("test")
+	c, err := f.(func(string, string) (chan string, error))("test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -605,7 +605,7 @@ func TestGetLastEventByType(t *testing.T) {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "scalar", msg2)
 	}
-	c, err := f.(func(tag string) (chan string, error))("test")
+	c, err := f.(func(string, string) (chan string, error))("test", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -667,7 +667,7 @@ func TestGetEventAt(t *testing.T) {
 	}
 	msgLast := "{\"message\":\"Last event\"}"
 	evStore.Committer().SubmitEvent("", "test", msgLast)
-	c, err := f.(func(tag string, timePoint time.Time) (chan string, error))("", tPoint)
+	c, err := f.(func(string, time.Time, string) (chan string, error))("", tPoint, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -731,7 +731,7 @@ func TestGetEventAtByType(t *testing.T) {
 		evStore.Committer().SubmitEvent("", "scalar", msg2)
 		evStore.Committer().SubmitEvent("", "test", msg2)
 	}
-	c, err := f.(func(tag string, tPoint time.Time) (chan string, error))("test", tPoint)
+	c, err := f.(func(string, time.Time, string) (chan string, error))("test", tPoint, "")
 	if err != nil {
 		t.Fatal(err)
 	}
