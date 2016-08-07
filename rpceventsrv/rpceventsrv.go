@@ -45,6 +45,21 @@ type (
 	}
 )
 
+func prepareRequest(tag string, filter string) (map[string]interface{}, error) {
+	requestParameter := make(map[string]interface{})
+	if filter != "" {
+		err := json.Unmarshal([]byte(filter), &requestParameter)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if tag != "" {
+		requestParameter["tag"] = make(map[string]interface{})
+		requestParameter["tag"].(map[string]interface{})["$eq"] = tag
+	}
+	return requestParameter, nil
+}
+
 func NewRPCFunctionInterface(e evstore.Connection) RPCFunctionInterface {
 	return &RPCFunction{e}
 }
@@ -63,9 +78,10 @@ func (f *RPCFunction) GetLastEvent(tag string, filter string) (chan string, erro
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "-$natural"
-	requestParameter := make(map[string]interface{})
-	requestParameter["tag"] = make(map[string]interface{})
-	requestParameter["tag"].(map[string]interface{})["$eq"] = tag
+	requestParameter, err := prepareRequest(tag, filter)
+	if err != nil {
+		return nil, err
+	}
 	ch, err := f.evStore.Query().FindOne(requestParameter, sortOrder)
 	return ch, err
 }
@@ -75,7 +91,10 @@ func (f *RPCFunction) GetHistory(tag string, from time.Time, to time.Time, filte
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "$natural"
-	requestParameter := make(map[string]interface{})
+	requestParameter, err := prepareRequest(tag, filter)
+	if err != nil {
+		return nil, err
+	}
 	requestParameter["timestamp"] = make(map[string]interface{})
 	requestParameter["timestamp"].(map[string]interface{})["$gt"] = from
 	requestParameter["timestamp"].(map[string]interface{})["$lt"] = to
@@ -100,7 +119,10 @@ func (f *RPCFunction) GetDistanceValue(tag string, from time.Time, to time.Time,
 	nanosecondsInOneInterval := to.Sub(from) / time.Duration(numberOfPoints)
 	currentPoint := to
 	sortOrder := "-$natural"
-	requestParameter := make(map[string]interface{})
+	requestParameter, err := prepareRequest(tag, filter)
+	if err != nil {
+		return nil, err
+	}
 	requestParameter["timestamp"] = make(map[string]interface{})
 	requestParameter["timestamp"].(map[string]interface{})["$lt"] = to
 	ch, err := f.evStore.Query().Find(requestParameter, sortOrder)
@@ -167,9 +189,10 @@ func (f *RPCFunction) GetFirstEvent(tag string, filter string) (chan string, err
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "$natural"
-	requestParameter := make(map[string]interface{})
-	requestParameter["tag"] = make(map[string]interface{})
-	requestParameter["tag"].(map[string]interface{})["$eq"] = tag
+	requestParameter, err := prepareRequest(tag, filter)
+	if err != nil {
+		return nil, err
+	}
 	ch, err := f.evStore.Query().FindOne(requestParameter, sortOrder)
 	return ch, err
 }
@@ -179,10 +202,9 @@ func (f *RPCFunction) GetEventAt(tag string, tPoint time.Time, filter string) (c
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "-$natural"
-	requestParameter := make(map[string]interface{})
-	if tag != "" {
-		requestParameter["tag"] = make(map[string]interface{})
-		requestParameter["tag"].(map[string]interface{})["$eq"] = tag
+	requestParameter, err := prepareRequest(tag, filter)
+	if err != nil {
+		return nil, err
 	}
 	requestParameter["timestamp"] = make(map[string]interface{})
 	requestParameter["timestamp"].(map[string]interface{})["$lte"] = tPoint

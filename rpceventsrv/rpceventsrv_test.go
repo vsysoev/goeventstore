@@ -96,6 +96,37 @@ func (f *fakeQuery) FindOne(params interface{}, sortOrder string) (chan string, 
 func (f *fakeQuery) Pipe(fakePipeline interface{}) (chan string, error) {
 	return nil, errors.New("Not implemented")
 }
+
+func initEventStore(url string, dbName string, collectionName string) (evstore.Connection, error) {
+	evStore, err := evstore.Dial(url, dbName, collectionName)
+	if err != nil {
+		return nil, err
+	}
+	evStore.Manager().DropDatabase(dbName)
+	return evStore, err
+}
+
+func submitNScalars(evStore evstore.Connection, number int, box_id int, var_id int, delay time.Duration) error {
+	for n := 0; n < number; n++ {
+		msg := "{\"box_id\":" + strconv.Itoa(box_id) + ", \"var_id\":" + strconv.Itoa(var_id) + ", \"value\":" + strconv.FormatFloat(float64(n), 'f', -1, 32) + "}"
+		err := evStore.Committer().SubmitEvent("", "scalar", msg)
+		if err != nil {
+			return err
+		}
+		if delay > 0 {
+			<-time.After(delay)
+		}
+	}
+	return nil
+}
+func getRPCFunction(evStore evstore.Connection, funcName string) (interface{}, error) {
+	rpc := NewRPCFunctionInterface(evStore)
+	if rpc == nil {
+		return rpc, errors.New("Can't get RPCFuncitonInterface")
+	}
+	return rpc.GetFunction(funcName)
+}
+
 func TestNilEventStore(t *testing.T) {
 	var (
 		rpc RPCFunction
@@ -107,7 +138,7 @@ func TestNilEventStore(t *testing.T) {
 }
 
 func TestNewRPCFunctionInterface(t *testing.T) {
-	c, err := evstore.Dial("localhost", dbName, "test")
+	c, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal("Error connecting to evstore")
 	}
@@ -132,18 +163,11 @@ func TestNegativeNewRPCFunctionInterface(t *testing.T) {
 }
 
 func TestGetFunction(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("Echo")
+	f, err := getRPCFunction(evStore, "Echo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,18 +176,11 @@ func TestGetFunction(t *testing.T) {
 	}
 }
 func TestNegativeGetFunction(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("EchoFake")
+	f, err := getRPCFunction(evStore, "EchoFake")
 	if err == nil {
 		t.Fatal(err)
 	}
@@ -194,77 +211,58 @@ func TestFailedGetLastEvent(t *testing.T) {
 }
 
 func TestGetHistory(t *testing.T) {
-	var (
-		m map[string]interface{}
-	)
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetHistory")
+	f, err := getRPCFunction(evStore, "GetHistory")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase(dbName)
 	msg1 := "{\"message\":\"NOT expected\"}"
-	evStore.Committer().SubmitEvent("", "test", msg1)
-	<-time.After(2 * time.Second)
+	evStore.Committer().SubmitEvent("", "scalar", msg1)
+	<-time.After(1 * time.Second)
 	tStart := time.Now()
-	for n := 0; n < 10; n++ {
-		fmt.Printf(".")
-		msg2 := "{\"message\":\"" + strconv.Itoa(n) + "\"}"
-		evStore.Committer().SubmitEvent("", "test", msg2)
-		<-time.After(500 * time.Millisecond)
-	}
+	<-time.After(1 * time.Second)
+	submitNScalars(evStore, 10, 1, 1, 100*time.Millisecond)
 	tStop := time.Now()
 	<-time.After(2 * time.Second)
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer().SubmitEvent("", "scalar", msg1)
 	log.Println(tStart, " < ", tStop)
-	c, err := f.(func(string, time.Time, time.Time, string) (chan string, error))("test", tStart, tStop, "")
+	c, err := f.(func(string, time.Time, time.Time, string) (chan string, error))("scalar", tStart, tStop, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c == nil {
 		t.Fatal("Channel shouldn't be nil")
 	}
-	for {
-		msg, ok := <-c
-		if !ok {
-			break
-		}
-		log.Println(msg)
+	expected := 0
+	msgCount := 0
+	for msg := range c {
+		m := make(map[string]interface{}, 1)
 		err = json.Unmarshal([]byte(msg), &m)
 		if err != nil {
 			t.Fatal(err)
 		}
-		//		if m["event"].(map[string]interface{})["message"] != "expected" {
-		//			t.Fatal(m["event"].(map[string]interface{})["message"])
-		//		}
+		if m["event"].(map[string]interface{})["value"] != float64(expected) {
+			t.Fatal(m["event"], "Expected ", expected)
+		}
+		expected = expected + 1
+		msgCount = msgCount + 1
+	}
+	if msgCount != 10 {
+		t.Fatal("Incorrect amount of messages returned.", msgCount)
 	}
 }
 func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetDistanceValue")
+	f, err := getRPCFunction(evStore, "GetDistanceValue")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,18 +280,11 @@ func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
 }
 
 func TestGetDistanceValueIncorrectInterval(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetDistanceValue")
+	f, err := getRPCFunction(evStore, "GetDistanceValue")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,18 +301,11 @@ func TestGetDistanceValueIncorrectInterval(t *testing.T) {
 
 }
 func TestGetDistanceValueZerroInterval(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetDistanceValue")
+	f, err := getRPCFunction(evStore, "GetDistanceValue")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -341,25 +325,17 @@ func TestGetDistanceValue(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetDistanceValue")
+	f, err := getRPCFunction(evStore, "GetDistanceValue")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase(dbName)
 	msg1 := "{\"message\":\"NOT expected\"}"
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	<-time.After(1 * time.Second)
@@ -404,25 +380,17 @@ func TestGetFirstEvent(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetFirstEvent")
+	f, err := getRPCFunction(evStore, "GetFirstEvent")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase(dbName)
 	msg1 := "{\"message\":\"First event\"}"
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	for n := 0; n < 100; n++ {
@@ -460,25 +428,17 @@ func TestGetFirstEventByType(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetFirstEvent")
+	f, err := getRPCFunction(evStore, "GetFirstEvent")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase(dbName)
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event before\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "scalar", msg2)
@@ -519,25 +479,17 @@ func TestGetLastEvent(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetLastEvent")
+	f, err := getRPCFunction(evStore, "GetLastEvent")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase(dbName)
 	msg1 := "{\"message\":\"First event\"}"
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	for n := 0; n < 100; n++ {
@@ -576,25 +528,17 @@ func TestGetLastEventByType(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetLastEvent")
+	f, err := getRPCFunction(evStore, "GetLastEvent")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase(dbName)
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event before\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "test", msg2)
@@ -634,25 +578,17 @@ func TestGetEventAt(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetEventAt")
+	f, err := getRPCFunction(evStore, "GetEventAt")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase(dbName)
 	msg1 := "{\"message\":\"First event\"}"
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	for n := 0; n < 50; n++ {
@@ -698,25 +634,17 @@ func TestGetEventAtByType(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("GetEventAt")
+	f, err := getRPCFunction(evStore, "GetEventAt")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	evStore.Manager().DropDatabase(dbName)
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Counter\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "test", msg2)
@@ -760,18 +688,11 @@ func TestGetEventAtByType(t *testing.T) {
 }
 
 func TestListDatabases(t *testing.T) {
-	evStore, err := evstore.Dial("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rpc := NewRPCFunctionInterface(evStore)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rpc == nil {
-		t.Fatal("RPCFunctionInterface is nil")
-	}
-	f, err := rpc.GetFunction("ListDatabases")
+	f, err := getRPCFunction(evStore, "ListDatabases")
 	if err != nil {
 		t.Fatal(err)
 	}
