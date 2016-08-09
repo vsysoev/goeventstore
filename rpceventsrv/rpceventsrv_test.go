@@ -422,8 +422,8 @@ func TestGetFirstEvent(t *testing.T) {
 	if msgCounter > 1 {
 		t.Fatal("Too many messages returned", msgCounter)
 	}
-
 }
+
 func TestGetFirstEventByType(t *testing.T) {
 	var (
 		m map[string]interface{}
@@ -475,6 +475,105 @@ func TestGetFirstEventByType(t *testing.T) {
 	}
 
 }
+func TestGetFirstEventByFilter(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := initEventStore("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	submitNScalars(evStore, 10, 1, 1, 0)
+	submitNScalars(evStore, 3, 2, 1, 0)
+	submitNScalars(evStore, 100, 1, 1, 0)
+	f, err := getRPCFunction(evStore, "GetFirstEvent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := f.(func(string, string) (chan string, error))("scalar", "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 1}}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for msg := range c {
+		msgCounter = msgCounter + 1
+		log.Println(msg)
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m["event"].(map[string]interface{})["box_id"].(float64) != float64(2) {
+			t.Fatal("Incorrect message retuned: ", m["event"])
+		}
+		if m["event"].(map[string]interface{})["var_id"].(float64) != float64(1) {
+			t.Fatal("Incorrect message retuned: ", m["event"])
+		}
+		if m["event"].(map[string]interface{})["value"].(float64) != float64(0) {
+			t.Fatal("Incorrect message retuned: ", m["event"])
+		}
+
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
+
+}
+func TestGetLastEventByFilter(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := initEventStore("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	submitNScalars(evStore, 10, 1, 1, 0)
+	submitNScalars(evStore, 3, 2, 1, 0)
+	submitNScalars(evStore, 100, 1, 1, 0)
+	f, err := getRPCFunction(evStore, "GetLastEvent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := f.(func(string, string) (chan string, error))("scalar", "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 1}}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for msg := range c {
+		msgCounter = msgCounter + 1
+		log.Println(msg)
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m["event"].(map[string]interface{})["box_id"].(float64) != float64(2) {
+			t.Fatal("Incorrect message retuned: ", m["event"])
+		}
+		if m["event"].(map[string]interface{})["var_id"].(float64) != float64(1) {
+			t.Fatal("Incorrect message retuned: ", m["event"])
+		}
+		if m["event"].(map[string]interface{})["value"].(float64) != float64(2) {
+			t.Fatal("Incorrect message retuned: ", m["event"])
+		}
+
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
+
+}
+
 func TestGetLastEvent(t *testing.T) {
 	var (
 		m map[string]interface{}
