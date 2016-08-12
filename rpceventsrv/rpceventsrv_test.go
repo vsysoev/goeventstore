@@ -257,6 +257,62 @@ func TestGetHistory(t *testing.T) {
 		t.Fatal("Incorrect amount of messages returned.", msgCount)
 	}
 }
+
+func TestGetHistoryFilter(t *testing.T) {
+	evStore, err := initEventStore("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	msg1 := "{\"message\":\"NOT expected\"}"
+	evStore.Committer().SubmitEvent("", "scalar", msg1)
+	<-time.After(1 * time.Second)
+	tStart := time.Now()
+	<-time.After(1 * time.Second)
+	submitNScalars(evStore, 10, 1, 1, 100*time.Millisecond)
+	submitNScalars(evStore, 20, 1, 2, 100*time.Millisecond)
+	tStop := time.Now()
+	<-time.After(2 * time.Second)
+	evStore.Committer().SubmitEvent("", "scalar", msg1)
+	log.Println(tStart, " < ", tStop)
+	f, err := getRPCFunction(evStore, "GetHistory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	c, err := f.(func(string, time.Time, time.Time, string) (chan string, error))("scalar", tStart, tStop, "{\"event.box_id\": { \"$eq\": 1 }, \"event.var_id\": {\"$eq\": 2}}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	expected := 0
+	msgCount := 0
+	for msg := range c {
+		m := make(map[string]interface{}, 1)
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m["event"].(map[string]interface{})["box_id"] != float64(1) {
+			t.Fatal(m["event"], "Expected box_id 1")
+		}
+		if m["event"].(map[string]interface{})["var_id"] != float64(2) {
+			t.Fatal(m["event"], "Expected var_id 2")
+		}
+		if m["event"].(map[string]interface{})["value"] != float64(expected) {
+			t.Fatal(m["event"], "Expected ", expected)
+		}
+		expected = expected + 1
+		msgCount = msgCount + 1
+	}
+	if msgCount != 20 {
+		t.Fatal("Incorrect amount of messages returned.", msgCount)
+	}
+}
+
 func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
 	evStore, err := initEventStore("localhost", dbName, "test")
 	if err != nil {
@@ -352,6 +408,57 @@ func TestGetDistanceValue(t *testing.T) {
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	log.Println(tStart, " < ", tStop)
 	c, err := f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStop, 10, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for {
+		msg, ok := <-c
+		if !ok {
+			break
+		}
+		msgCounter = msgCounter + 1
+		//		log.Println(msg)
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+}
+
+func TestGetDistanceValueFilter(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := initEventStore("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := getRPCFunction(evStore, "GetDistanceValue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	msg1 := "{\"message\":\"NOT expected\"}"
+	evStore.Committer().SubmitEvent("", "test", msg1)
+	<-time.After(1 * time.Second)
+	tStart := time.Now()
+	<-time.After(10 * time.Millisecond)
+	submitNScalars(evStore, 100, 1, 1, 100*time.Millisecond)
+	submitNScalars(evStore, 100, 3, 1, 0)
+	tStop := time.Now()
+	<-time.After(2 * time.Second)
+	evStore.Committer().SubmitEvent("", "test", msg1)
+	log.Println(tStart, " < ", tStop)
+	c, err := f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStop, 10, "{\"event.box_id\": { \"$eq\": 1 }, \"event.var_id\": {\"$eq\": 1}}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -775,6 +882,60 @@ func TestGetEventAtByType(t *testing.T) {
 		}
 		if int(m["event"].(map[string]interface{})["Counter"].(float64)) != 99 {
 			t.Fatal("Incorrect message retuned: ", m["message"])
+		}
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
+
+}
+
+func TestGetEventAtByFilter(t *testing.T) {
+	var (
+		m map[string]interface{}
+	)
+	evStore, err := initEventStore("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := getRPCFunction(evStore, "GetEventAt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	submitNScalars(evStore, 100, 1, 2, 0)
+	submitNScalars(evStore, 1, 2, 2, 0)
+	tPoint := time.Now()
+	<-time.After(100 * time.Millisecond)
+	submitNScalars(evStore, 100, 3, 2, 0)
+	c, err := f.(func(string, time.Time, string) (chan string, error))("scalar", tPoint, "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 2}}")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("Channel shouldn't be nil")
+	}
+	msgCounter := 0
+	for msg := range c {
+		msgCounter = msgCounter + 1
+		log.Println(msg)
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m["event"].(map[string]interface{})["box_id"].(float64) != float64(2) {
+			t.Fatal("Incorrect message retuned: ", m["event"])
+		}
+		if m["event"].(map[string]interface{})["var_id"].(float64) != float64(2) {
+			t.Fatal("Incorrect message retuned: ", m["event"])
+		}
+		if m["event"].(map[string]interface{})["value"].(float64) != float64(0) {
+			t.Fatal("Incorrect message retuned: ", m["event"])
 		}
 	}
 	if msgCounter == 0 {
