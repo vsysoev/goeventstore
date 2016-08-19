@@ -541,7 +541,11 @@ func TestGetFirstEvent(t *testing.T) {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "test", msg2)
 	}
-	c, err := f.(func(string, string) (chan string, error))("test", "")
+	p := make(map[string]interface{})
+	p["tag"] = "test"
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -549,7 +553,7 @@ func TestGetFirstEvent(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for msg := range c {
+	for msg := range c.(chan string) {
 		msgCounter = msgCounter + 1
 		log.Println(msg)
 		err = json.Unmarshal([]byte(msg), &m)
@@ -593,7 +597,11 @@ func TestGetFirstEventByType(t *testing.T) {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "scalar", msg2)
 	}
-	c, err := f.(func(string, string) (chan string, error))("test", "")
+	p := make(map[string]interface{})
+	p["tag"] = "test"
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +609,7 @@ func TestGetFirstEventByType(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for msg := range c {
+	for msg := range c.(chan string) {
 		msgCounter = msgCounter + 1
 		err = json.Unmarshal([]byte(msg), &m)
 		if err != nil {
@@ -634,7 +642,11 @@ func TestGetFirstEventByFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := f.(func(string, string) (chan string, error))("scalar", "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 1}}")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["filter"] = "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 1}}"
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,7 +654,7 @@ func TestGetFirstEventByFilter(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for msg := range c {
+	for msg := range c.(chan string) {
 		msgCounter = msgCounter + 1
 		log.Println(msg)
 		err = json.Unmarshal([]byte(msg), &m)

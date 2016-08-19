@@ -312,11 +312,19 @@ func (f *RPCFunction) GetDistanceValue(params RPCParameterInterface) (interface{
 	return ch_out, err
 }
 
-func (f *RPCFunction) GetFirstEvent(tag string, filter string) (chan string, error) {
+func (f *RPCFunction) GetFirstEvent(params RPCParameterInterface) (interface{}, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "$natural"
+	tag, err := params.AsString("tag")
+	if err != nil {
+		return nil, err
+	}
+	filter, err := params.AsString("filter")
+	if err != nil {
+		return nil, err
+	}
 	requestParameter, err := prepareRequest(tag, filter)
 	if err != nil {
 		return nil, err
