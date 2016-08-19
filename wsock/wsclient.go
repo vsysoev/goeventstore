@@ -27,13 +27,13 @@ type (
 		toWS   chan *MessageT
 		doneCh chan bool
 	}
-	// Producer interface define interface to client factory
-	Producer interface {
-		NewClient(ws *websocket.Conn, server *Server) *Client
-	}
 	// Connector interface defines communication interface
 	Connector interface {
 		GetChannels() (chan *MessageT, chan *MessageT, chan bool)
+		Request() *http.Request
+		Conn() *websocket.Conn
+		Write(msg *MessageT)
+		Done()
 	}
 )
 

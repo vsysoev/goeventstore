@@ -1,10 +1,12 @@
 package main
 
 import (
+	"net/http"
 	"testing"
 	"time"
 
 	"golang.org/x/net/context"
+	"golang.org/x/net/websocket"
 
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -36,6 +38,18 @@ func makeStubClient() Connector {
 // GetChannels stub to return channels
 func (ws *stubClient) GetChannels() (chan *wsock.MessageT, chan *wsock.MessageT, chan bool) {
 	return ws.fromWS, ws.toWS, ws.doneCh
+}
+func (ws *stubClient) Request() *http.Request {
+	return nil
+}
+func (ws *stubClient) Conn() *websocket.Conn {
+	return nil
+}
+func (ws *stubClient) Write(msg *wsock.MessageT) {
+
+}
+func (ws *stubClient) Done() {
+
 }
 
 func CleanupCollections() {

@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"testing"
@@ -201,7 +200,11 @@ func TestFailedGetLastEvent(t *testing.T) {
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	_, err = (f.(func(string, string) (chan string, error)))("", "")
+	p := make(map[string]interface{})
+	p["tag"] = ""
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	_, err = (f.(func(RPCParameterInterface) (interface{}, error)))(prms)
 	if err == nil {
 		t.Fatal("Should be an error")
 	}
@@ -232,7 +235,13 @@ func TestGetHistory(t *testing.T) {
 	<-time.After(2 * time.Second)
 	evStore.Committer().SubmitEvent("", "scalar", msg1)
 	log.Println(tStart, " < ", tStop)
-	c, err := f.(func(string, time.Time, time.Time, string) (chan string, error))("scalar", tStart, tStop, "")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["from"] = tStart
+	p["to"] = tStop
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +250,7 @@ func TestGetHistory(t *testing.T) {
 	}
 	expected := 0
 	msgCount := 0
-	for msg := range c {
+	for msg := range c.(chan string) {
 		m := make(map[string]interface{}, 1)
 		err = json.Unmarshal([]byte(msg), &m)
 		if err != nil {
@@ -281,7 +290,13 @@ func TestGetHistoryFilter(t *testing.T) {
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	c, err := f.(func(string, time.Time, time.Time, string) (chan string, error))("scalar", tStart, tStop, "{\"event.box_id\": { \"$eq\": 1 }, \"event.var_id\": {\"$eq\": 2}}")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["from"] = tStart
+	p["to"] = tStop
+	p["filter"] = "{\"event.box_id\": { \"$eq\": 1 }, \"event.var_id\": {\"$eq\": 2}}"
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +305,7 @@ func TestGetHistoryFilter(t *testing.T) {
 	}
 	expected := 0
 	msgCount := 0
-	for msg := range c {
+	for msg := range c.(chan string) {
 		m := make(map[string]interface{}, 1)
 		err = json.Unmarshal([]byte(msg), &m)
 		if err != nil {
@@ -327,7 +342,14 @@ func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
 	}
 	tStart := time.Now()
 	tStop := tStart.Add(10 * time.Second)
-	_, err = f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStop, -10, "")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["from"] = tStart
+	p["to"] = tStop
+	p["numberOfPoints"] = -10
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	_, err = f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	expectedError := "numberOfPoints should be positive integer"
 	if err.Error() != expectedError {
 		t.Fatal(err.Error() + " != " + expectedError)
@@ -349,7 +371,14 @@ func TestGetDistanceValueIncorrectInterval(t *testing.T) {
 	}
 	tStop := time.Now()
 	tStart := tStop.Add(10 * time.Second)
-	_, err = f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStop, 10, "")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["from"] = tStart
+	p["to"] = tStop
+	p["numberOfPoints"] = 10
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	_, err = f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	expectedError := "To must be greater than From"
 	if err.Error() != expectedError {
 		t.Fatal(err.Error() + " != " + expectedError)
@@ -369,7 +398,14 @@ func TestGetDistanceValueZerroInterval(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	tStart := time.Now()
-	_, err = f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStart, 10, "")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["from"] = tStart
+	p["to"] = tStart
+	p["numberOfPoints"] = 10
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	_, err = f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	expectedError := "To must be greater than From"
 	if err.Error() != expectedError {
 		t.Fatal(err.Error() + " != " + expectedError)
@@ -397,17 +433,19 @@ func TestGetDistanceValue(t *testing.T) {
 	<-time.After(1 * time.Second)
 	tStart := time.Now()
 	<-time.After(10 * time.Millisecond)
-	for n := 0; n < 100; n++ {
-		fmt.Printf(".")
-		msg2 := "{\"value\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "scalar", msg2)
-		<-time.After(100 * time.Millisecond)
-	}
+	submitNScalars(evStore, 100, 1, 1, 100)
 	tStop := time.Now()
 	<-time.After(2 * time.Second)
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	log.Println(tStart, " < ", tStop)
-	c, err := f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStop, 10, "")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["from"] = tStart
+	p["to"] = tStop
+	p["numberOfPoints"] = 10
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,11 +453,7 @@ func TestGetDistanceValue(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for {
-		msg, ok := <-c
-		if !ok {
-			break
-		}
+	for msg := range c.(chan string) {
 		msgCounter = msgCounter + 1
 		//		log.Println(msg)
 		err = json.Unmarshal([]byte(msg), &m)
@@ -458,7 +492,14 @@ func TestGetDistanceValueFilter(t *testing.T) {
 	<-time.After(2 * time.Second)
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	log.Println(tStart, " < ", tStop)
-	c, err := f.(func(string, time.Time, time.Time, int, string) (chan string, error))("scalar", tStart, tStop, 10, "{\"event.box_id\": { \"$eq\": 1 }, \"event.var_id\": {\"$eq\": 1}}")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["from"] = tStart
+	p["to"] = tStop
+	p["numberOfPoints"] = 10
+	p["filter"] = "{\"event.box_id\": { \"$eq\": 1 }, \"event.var_id\": {\"$eq\": 1}}"
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,11 +507,7 @@ func TestGetDistanceValueFilter(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for {
-		msg, ok := <-c
-		if !ok {
-			break
-		}
+	for msg := range c.(chan string) {
 		msgCounter = msgCounter + 1
 		//		log.Println(msg)
 		err = json.Unmarshal([]byte(msg), &m)
@@ -646,7 +683,11 @@ func TestGetLastEventByFilter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := f.(func(string, string) (chan string, error))("scalar", "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 1}}")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["filter"] = "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 1}}"
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -654,7 +695,7 @@ func TestGetLastEventByFilter(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for msg := range c {
+	for msg := range c.(chan string) {
 		msgCounter = msgCounter + 1
 		log.Println(msg)
 		err = json.Unmarshal([]byte(msg), &m)
@@ -704,7 +745,11 @@ func TestGetLastEvent(t *testing.T) {
 	}
 	msgLast := "{\"message\":\"Last event\"}"
 	evStore.Committer().SubmitEvent("", "test", msgLast)
-	c, err := f.(func(string, string) (chan string, error))("test", "")
+	p := make(map[string]interface{})
+	p["tag"] = "test"
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -712,7 +757,7 @@ func TestGetLastEvent(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for msg := range c {
+	for msg := range c.(chan string) {
 		msgCounter = msgCounter + 1
 		err = json.Unmarshal([]byte(msg), &m)
 		if err != nil {
@@ -755,7 +800,11 @@ func TestGetLastEventByType(t *testing.T) {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
 		evStore.Committer().SubmitEvent("", "scalar", msg2)
 	}
-	c, err := f.(func(string, string) (chan string, error))("test", "")
+	p := make(map[string]interface{})
+	p["tag"] = "test"
+	p["filter"] = ""
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -763,7 +812,7 @@ func TestGetLastEventByType(t *testing.T) {
 		t.Fatal("Channel shouldn't be nil")
 	}
 	msgCounter := 0
-	for msg := range c {
+	for msg := range c.(chan string) {
 		msgCounter = msgCounter + 1
 		err = json.Unmarshal([]byte(msg), &m)
 		if err != nil {
@@ -908,11 +957,11 @@ func TestGetEventAtByFilter(t *testing.T) {
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	submitNScalars(evStore, 100, 1, 2, 0)
+	submitNScalars(evStore, 100, 1, 1, 0)
 	submitNScalars(evStore, 1, 2, 2, 0)
 	tPoint := time.Now()
 	<-time.After(100 * time.Millisecond)
-	submitNScalars(evStore, 100, 3, 2, 0)
+	submitNScalars(evStore, 100, 3, 23, 0)
 	c, err := f.(func(string, time.Time, string) (chan string, error))("scalar", tPoint, "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 2}}")
 	if err != nil {
 		t.Fatal(err)
@@ -959,11 +1008,56 @@ func TestListDatabases(t *testing.T) {
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	dbList, err := f.(func() ([]string, error))()
+	dbList, err := f.(func(RPCParameterInterface) ([]string, error))(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(dbList) == 0 {
 		t.Fatal("List should not be empty")
 	}
+}
+
+func TestEcho(t *testing.T) {
+	var m map[string]interface{}
+	p := make(map[string]interface{}, 1)
+	p["int"] = 1
+	p["string"] = "This is string"
+	prms := NewRPCParameterInterface(p)
+	evStore, err := initEventStore("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := getRPCFunction(evStore, "Echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f == nil {
+		t.Fatal("Function is nil")
+	}
+	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgCounter := 0
+	for msg := range c.(chan string) {
+		msgCounter = msgCounter + 1
+		log.Println(msg)
+		err = json.Unmarshal([]byte(msg), &m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if int(m["int"].(float64)) != 1 {
+			t.Fatal("Incorrect message retuned: ", m["int"])
+		}
+		if m["string"] != "This is string" {
+			t.Fatal("Incorrect message retuned: ", m["string"])
+		}
+	}
+	if msgCounter == 0 {
+		t.Fatal("No message recieved from database")
+	}
+	if msgCounter > 1 {
+		t.Fatal("Too many messages returned", msgCounter)
+	}
+
 }
