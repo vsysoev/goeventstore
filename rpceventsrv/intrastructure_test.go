@@ -123,3 +123,28 @@ func TestClientGetLastEventByFilter(t *testing.T) {
 	cancelFunc()
 	log.Println(m)
 }
+
+func TestClientGetFirstEventByFilter(t *testing.T) {
+	c := NewFakeClient()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	evStore, err := initEventStore("localhost", dbName, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := RPCFunction{evStore}
+	submitNScalars(evStore, 10, 1, 1, 0)
+	submitNScalars(evStore, 3, 2, 1, 0)
+	submitNScalars(evStore, 100, 1, 1, 0)
+	go clientHandler(ctx, c, &f)
+	toClient, fromClient, _ := c.GetChannels()
+	msg := wsock.MessageT{}
+	msg["jsonrpc"] = "2.0"
+	msg["method"] = "GetFirstEvent"
+	msg["params"] = make(map[string]interface{}, 1)
+	msg["params"].(map[string]interface{})["tag"] = "scalar"
+	msg["params"].(map[string]interface{})["filter"] = "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 1}}"
+	toClient <- &msg
+	m := <-fromClient
+	cancelFunc()
+	log.Println(m)
+}
