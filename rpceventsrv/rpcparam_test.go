@@ -91,7 +91,7 @@ func TestRPCParamStringAsTimestamp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s != expected {
+	if !s.Equal(expected) {
 		t.Fatal("Expected:", expected, ". Got:", s, ".")
 	}
 }
