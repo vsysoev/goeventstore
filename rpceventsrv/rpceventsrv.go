@@ -387,10 +387,57 @@ Loop:
 			if !ok {
 				break Loop
 			}
-			log.Println("Request", (*request)["method"])
-
-			method := (*request)["method"].(string)
-			params := NewRPCParameterInterface((*request)["params"].(map[string]interface{}))
+			id := 0
+			if iid, ok := (*request)["id"]; ok {
+				switch iid.(type) {
+				default:
+					js := wsock.MessageT{}
+					js["error"] = "ERROR: id should be int. Not " + reflect.TypeOf(iid).String()
+					toWS <- &js
+					return
+				case int:
+					id = iid.(int)
+				}
+			} else {
+				js := wsock.MessageT{}
+				js["error"] = "ERROR: No id found in request."
+				toWS <- &js
+				return
+			}
+			method := ""
+			if m, ok := (*request)["method"]; ok {
+				switch m.(type) {
+				default:
+					js := wsock.MessageT{}
+					js["error"] = "ERROR: Method should be string. Not " + reflect.TypeOf(m).String()
+					toWS <- &js
+					return
+				case string:
+					method = m.(string)
+				}
+			} else {
+				js := wsock.MessageT{}
+				js["error"] = "ERROR: No method field found in request."
+				toWS <- &js
+				return
+			}
+			params := NewRPCParameterInterface(make(map[string]interface{}, 1))
+			if p, ok := (*request)["params"]; ok {
+				switch p.(type) {
+				default:
+					js := wsock.MessageT{}
+					js["error"] = "ERROR: Params should be JSON object. Not " + reflect.TypeOf(p).String()
+					toWS <- &js
+					return
+				case map[string]interface{}:
+					params = NewRPCParameterInterface(p.(map[string]interface{}))
+				}
+			} else {
+				js := wsock.MessageT{}
+				js["error"] = "ERROR: No params found in request."
+				toWS <- &js
+				return
+			}
 			log.Println("type of params", reflect.TypeOf(params))
 			m := reflect.ValueOf(f).MethodByName(method)
 			if !m.IsValid() {
@@ -410,7 +457,7 @@ Loop:
 			log.Println("Function returned", ch)
 			js := wsock.MessageT{}
 			js["jsonrpc"] = (*request)["jsonrpc"]
-			js["id"] = (*request)["id"]
+			js["id"] = id
 			switch ch.(type) {
 			default:
 				js["error"] = make(map[string]interface{}, 1)

@@ -148,3 +148,160 @@ func TestClientGetFirstEventByFilter(t *testing.T) {
 	cancelFunc()
 	log.Println(m)
 }
+
+func TestNegativeEcho(t *testing.T) {
+	var (
+		f *RPCFunction
+	)
+	c := NewFakeClient()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	go clientHandler(ctx, c, f)
+	toClient, fromClient, _ := c.GetChannels()
+	msg := wsock.MessageT{}
+	msg["jsonrpc"] = "2.0"
+	msg["method"] = "Echo"
+	toClient <- &msg
+	m := <-fromClient
+	cancelFunc()
+	log.Println(m)
+}
+func TestNegativeNoMethod(t *testing.T) {
+	var (
+		f *RPCFunction
+	)
+	c := NewFakeClient()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	go clientHandler(ctx, c, f)
+	toClient, fromClient, _ := c.GetChannels()
+	msg := wsock.MessageT{}
+	msg["jsonrpc"] = "2.0"
+	msg["id"] = 1
+	toClient <- &msg
+	m := <-fromClient
+	cancelFunc()
+	if m.String() != "{\"error\":\"ERROR: No method field found in request.\"}" {
+		t.Fatal("Unexpected message returned: " + m.String())
+	}
+}
+func TestNegativeMethodisnotstring(t *testing.T) {
+	var (
+		f *RPCFunction
+	)
+	c := NewFakeClient()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	go clientHandler(ctx, c, f)
+	toClient, fromClient, _ := c.GetChannels()
+	msg := wsock.MessageT{}
+	msg["jsonrpc"] = "2.0"
+	msg["id"] = 1
+	msg["method"] = 1
+	toClient <- &msg
+	m := <-fromClient
+	cancelFunc()
+	if m.String() != "{\"error\":\"ERROR: Method should be string. Not int\"}" {
+		t.Fatal("Unexpected message returned: " + m.String())
+	}
+}
+func TestMethodisstring(t *testing.T) {
+	var (
+		f *RPCFunction
+	)
+	c := NewFakeClient()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	go clientHandler(ctx, c, f)
+	toClient, fromClient, _ := c.GetChannels()
+	msg := wsock.MessageT{}
+	msg["jsonrpc"] = "2.0"
+	msg["id"] = 1
+	msg["method"] = "Echo"
+	toClient <- &msg
+	m := <-fromClient
+	cancelFunc()
+	if m.String() != "{\"error\":\"ERROR: Method should be string. Not int\"}" {
+		t.Fatal("Unexpected message returned: " + m.String())
+	}
+}
+func TestNegativeNoid(t *testing.T) {
+	var (
+		f *RPCFunction
+	)
+	c := NewFakeClient()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	go clientHandler(ctx, c, f)
+	toClient, fromClient, _ := c.GetChannels()
+	msg := wsock.MessageT{}
+	msg["jsonrpc"] = "2.0"
+	msg["method"] = "Echo"
+	toClient <- &msg
+	m := <-fromClient
+	cancelFunc()
+	if m.String() != "{\"error\":\"ERROR: No id found in request.\"}" {
+		t.Fatal("Unexpected message returned: " + m.String())
+	}
+}
+func TestNegativeNointid(t *testing.T) {
+	var (
+		f *RPCFunction
+	)
+	c := NewFakeClient()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	go clientHandler(ctx, c, f)
+	toClient, fromClient, _ := c.GetChannels()
+	msg := wsock.MessageT{}
+	msg["jsonrpc"] = "2.0"
+	msg["id"] = "1.0"
+	msg["method"] = "Echo"
+	toClient <- &msg
+	m := <-fromClient
+	cancelFunc()
+	if m.String() != "{\"error\":\"ERROR: id should be int. Not string\"}" {
+		t.Fatal("Unexpected message returned: " + m.String())
+	}
+}
+func TestNegativeNoparams(t *testing.T) {
+	var (
+		f *RPCFunction
+	)
+	c := NewFakeClient()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	go clientHandler(ctx, c, f)
+	toClient, fromClient, _ := c.GetChannels()
+	msg := wsock.MessageT{}
+	msg["jsonrpc"] = "2.0"
+	msg["id"] = 1
+	msg["method"] = "Echo"
+	toClient <- &msg
+	m := <-fromClient
+	cancelFunc()
+	if m.String() != "{\"error\":\"ERROR: No params found in request.\"}" {
+		t.Fatal("Unexpected message returned: " + m.String())
+	}
+}
+func TestNegativeNoJSONparams(t *testing.T) {
+	var (
+		f *RPCFunction
+	)
+	c := NewFakeClient()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+
+	go clientHandler(ctx, c, f)
+	toClient, fromClient, _ := c.GetChannels()
+	msg := wsock.MessageT{}
+	msg["jsonrpc"] = "2.0"
+	msg["id"] = 1
+	msg["method"] = "Echo"
+	msg["params"] = "{string}"
+	toClient <- &msg
+	m := <-fromClient
+	cancelFunc()
+	if m.String() != "{\"error\":\"ERROR: Params should be JSON object. Not string\"}" {
+		t.Fatal("Unexpected message returned: " + m.String())
+	}
+}
