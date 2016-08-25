@@ -221,7 +221,7 @@ func TestMethodisstring(t *testing.T) {
 	toClient <- &msg
 	m := <-fromClient
 	cancelFunc()
-	if m.String() != "{\"error\":\"ERROR: Method should be string. Not int\"}" {
+	if m.String() != "{\"error\":\"ERROR: No params found in request.\"}" {
 		t.Fatal("Unexpected message returned: " + m.String())
 	}
 }
