@@ -397,6 +397,8 @@ Loop:
 					return
 				case int:
 					id = iid.(int)
+				case float64:
+					id = int(iid.(float64))
 				}
 			} else {
 				js := wsock.MessageT{}
