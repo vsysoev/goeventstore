@@ -211,3 +211,25 @@ func TestRPCParamTimestampAsInt(t *testing.T) {
 		t.Fatal("Expected ", expected, ". Got ", s)
 	}
 }
+
+func TestRPCParamStringAsMapString(t *testing.T) {
+	prms := make(map[string]interface{}, 1)
+	filter := make(map[string]interface{}, 1)
+	filter["int"] = 1
+	filter["string"] = "Hello world!!!"
+	expected := filter
+	prms["parameter"] = filter
+	p := NewRPCParameterInterface(prms)
+	if p == nil {
+		t.Fatal("RPCParamterInterface should not be nil")
+	}
+	s, err := p.AsMapString("parameter")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range s {
+		if expected[k] != v {
+			t.Fatal("Expected ", expected[k], ". Got ", v)
+		}
+	}
+}

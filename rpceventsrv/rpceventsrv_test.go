@@ -202,7 +202,7 @@ func TestFailedGetLastEvent(t *testing.T) {
 	}
 	p := make(map[string]interface{})
 	p["tag"] = ""
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	_, err = (f.(func(RPCParameterInterface) (interface{}, error)))(prms)
 	if err == nil {
@@ -239,7 +239,7 @@ func TestGetHistory(t *testing.T) {
 	p["tag"] = "scalar"
 	p["from"] = tStart
 	p["to"] = tStop
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
@@ -343,11 +343,12 @@ func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
 	tStart := time.Now()
 	tStop := tStart.Add(10 * time.Second)
 	p := make(map[string]interface{})
+	p["id"] = 1
 	p["tag"] = "scalar"
 	p["from"] = tStart
 	p["to"] = tStop
 	p["numberOfPoints"] = -10
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	_, err = f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	expectedError := "numberOfPoints should be positive integer"
@@ -372,11 +373,12 @@ func TestGetDistanceValueIncorrectInterval(t *testing.T) {
 	tStop := time.Now()
 	tStart := tStop.Add(10 * time.Second)
 	p := make(map[string]interface{})
+	p["id"] = 1
 	p["tag"] = "scalar"
 	p["from"] = tStart
 	p["to"] = tStop
 	p["numberOfPoints"] = 10
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	_, err = f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	expectedError := "To must be greater than From"
@@ -399,11 +401,12 @@ func TestGetDistanceValueZerroInterval(t *testing.T) {
 	}
 	tStart := time.Now()
 	p := make(map[string]interface{})
+	p["id"] = 1
 	p["tag"] = "scalar"
 	p["from"] = tStart
 	p["to"] = tStart
 	p["numberOfPoints"] = 10
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	_, err = f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	expectedError := "To must be greater than From"
@@ -439,11 +442,12 @@ func TestGetDistanceValue(t *testing.T) {
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	log.Println(tStart, " < ", tStop)
 	p := make(map[string]interface{})
+	p["id"] = 1
 	p["tag"] = "scalar"
 	p["from"] = tStart
 	p["to"] = tStop
 	p["numberOfPoints"] = 10
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
@@ -493,6 +497,7 @@ func TestGetDistanceValueFilter(t *testing.T) {
 	evStore.Committer().SubmitEvent("", "test", msg1)
 	log.Println(tStart, " < ", tStop)
 	p := make(map[string]interface{})
+	p["id"] = 1
 	p["tag"] = "scalar"
 	p["from"] = tStart
 	p["to"] = tStop
@@ -542,8 +547,9 @@ func TestGetFirstEvent(t *testing.T) {
 		evStore.Committer().SubmitEvent("", "test", msg2)
 	}
 	p := make(map[string]interface{})
+	p["id"] = 1
 	p["tag"] = "test"
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
@@ -599,7 +605,7 @@ func TestGetFirstEventByType(t *testing.T) {
 	}
 	p := make(map[string]interface{})
 	p["tag"] = "test"
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
@@ -759,7 +765,7 @@ func TestGetLastEvent(t *testing.T) {
 	evStore.Committer().SubmitEvent("", "test", msgLast)
 	p := make(map[string]interface{})
 	p["tag"] = "test"
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
@@ -814,7 +820,7 @@ func TestGetLastEventByType(t *testing.T) {
 	}
 	p := make(map[string]interface{})
 	p["tag"] = "test"
-	p["filter"] = ""
+	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
 	c, err := f.(func(RPCParameterInterface) (interface{}, error))(prms)
 	if err != nil {
@@ -870,7 +876,12 @@ func TestGetEventAt(t *testing.T) {
 	}
 	msgLast := "{\"message\":\"Last event\"}"
 	evStore.Committer().SubmitEvent("", "test", msgLast)
-	c, err := f.(func(string, time.Time, string) (chan string, error))("", tPoint, "")
+	p := make(map[string]interface{})
+	p["tag"] = ""
+	p["at"] = tPoint
+	p["filter"] = nil
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (chan string, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -926,7 +937,12 @@ func TestGetEventAtByType(t *testing.T) {
 		evStore.Committer().SubmitEvent("", "scalar", msg2)
 		evStore.Committer().SubmitEvent("", "test", msg2)
 	}
-	c, err := f.(func(string, time.Time, string) (chan string, error))("test", tPoint, "")
+	p := make(map[string]interface{})
+	p["tag"] = "test"
+	p["at"] = tPoint
+	p["filter"] = nil
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (chan string, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -974,7 +990,17 @@ func TestGetEventAtByFilter(t *testing.T) {
 	tPoint := time.Now()
 	<-time.After(100 * time.Millisecond)
 	submitNScalars(evStore, 100, 3, 23, 0)
-	c, err := f.(func(string, time.Time, string) (chan string, error))("scalar", tPoint, "{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 2}}")
+	p := make(map[string]interface{})
+	p["tag"] = "scalar"
+	p["at"] = tPoint
+	pFilter := make(map[string]interface{}, 1)
+	err = json.Unmarshal([]byte("{\"event.box_id\": { \"$eq\": 2 }, \"event.var_id\": {\"$eq\": 2}}"), &pFilter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p["filter"] = pFilter
+	prms := NewRPCParameterInterface(p)
+	c, err := f.(func(RPCParameterInterface) (chan string, error))(prms)
 	if err != nil {
 		t.Fatal(err)
 	}

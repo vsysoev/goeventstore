@@ -37,6 +37,7 @@ type (
 		AsInt64(string) (int64, error)
 		AsTimestamp(string) (time.Time, error)
 		Serialize() (string, error)
+		AsMapString(string) (map[string]interface{}, error)
 	}
 	RPCFunctionInterface interface {
 		GetFunction(funcName string) (interface{}, error)
@@ -55,19 +56,15 @@ type (
 	}
 )
 
-func prepareRequest(tag string, filter string) (map[string]interface{}, error) {
-	requestParameter := make(map[string]interface{})
-	if filter != "" {
-		err := json.Unmarshal([]byte(filter), &requestParameter)
-		if err != nil {
-			return nil, err
-		}
+func prepareRequest(tag string, filter map[string]interface{}) (map[string]interface{}, error) {
+	if filter == nil {
+		filter = make(map[string]interface{}, 1)
 	}
 	if tag != "" {
-		requestParameter["tag"] = make(map[string]interface{})
-		requestParameter["tag"].(map[string]interface{})["$eq"] = tag
+		filter["tag"] = make(map[string]interface{})
+		filter["tag"].(map[string]interface{})["$eq"] = tag
 	}
-	return requestParameter, nil
+	return filter, nil
 }
 
 func NewRPCParameterInterface(params map[string]interface{}) RPCParameterInterface {
@@ -141,6 +138,27 @@ func (p *RPCParameter) AsTimestamp(name string) (time.Time, error) {
 	return time.Unix(0, 0), errors.New("No parameter with " + name + " found.")
 }
 
+func (p *RPCParameter) AsMapString(name string) (map[string]interface{}, error) {
+	if val, ok := p.params[name]; ok {
+		if val == nil {
+			return nil, nil
+		}
+		switch val.(type) {
+		default:
+			return nil, errors.New("Can't convert " + reflect.TypeOf(val).String() + " to map[string]interface{}")
+		case string:
+			t := make(map[string]interface{}, 1)
+			err := json.Unmarshal([]byte(val.(string)), &t)
+			if err != nil {
+				return nil, err
+			}
+			return t, err
+		case map[string]interface{}:
+			return val.(map[string]interface{}), nil
+		}
+	}
+	return nil, errors.New("No parameter with " + name + " found.")
+}
 func (p *RPCParameter) Serialize() (string, error) {
 	b, err := json.Marshal(p.params)
 	return string(b), err
@@ -167,7 +185,7 @@ func (f *RPCFunction) GetLastEvent(params RPCParameterInterface) (interface{}, e
 	if err != nil {
 		return nil, err
 	}
-	filter, err := params.AsString("filter")
+	filter, err := params.AsMapString("filter")
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +207,7 @@ func (f *RPCFunction) GetHistory(params RPCParameterInterface) (interface{}, err
 	if err != nil {
 		return nil, err
 	}
-	filter, err := params.AsString("filter")
+	filter, err := params.AsMapString("filter")
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +241,7 @@ func (f *RPCFunction) GetDistanceValue(params RPCParameterInterface) (interface{
 	if err != nil {
 		return nil, err
 	}
-	filter, err := params.AsString("filter")
+	filter, err := params.AsMapString("filter")
 	if err != nil {
 		return nil, err
 	}
@@ -321,7 +339,7 @@ func (f *RPCFunction) GetFirstEvent(params RPCParameterInterface) (interface{}, 
 	if err != nil {
 		return nil, err
 	}
-	filter, err := params.AsString("filter")
+	filter, err := params.AsMapString("filter")
 	if err != nil {
 		return nil, err
 	}
@@ -333,15 +351,29 @@ func (f *RPCFunction) GetFirstEvent(params RPCParameterInterface) (interface{}, 
 	return ch, err
 }
 
-func (f *RPCFunction) GetEventAt(tag string, tPoint time.Time, filter string) (chan string, error) {
+func (f *RPCFunction) GetEventAt(params RPCParameterInterface) (chan string, error) {
 	if f.evStore == nil {
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "-$natural"
+
+	tag, err := params.AsString("tag")
+	if err != nil {
+		return nil, err
+	}
+	filter, err := params.AsMapString("filter")
+	if err != nil {
+		return nil, err
+	}
+	tPoint, err := params.AsTimestamp("at")
+	if err != nil {
+		return nil, err
+	}
 	requestParameter, err := prepareRequest(tag, filter)
 	if err != nil {
 		return nil, err
 	}
+
 	requestParameter["timestamp"] = make(map[string]interface{})
 	requestParameter["timestamp"].(map[string]interface{})["$lte"] = tPoint
 	log.Println(requestParameter)
