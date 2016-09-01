@@ -83,7 +83,9 @@ func (f *fakeManager) DropDatabase(databaseName string) error {
 func (f *fakeManager) DatabaseNames() ([]string, error) {
 	return nil, errors.New("Not implemented")
 }
-
+func (f *fakeManager) CollectionNames() ([]string, error) {
+	return nil, errors.New("Not implemented")
+}
 func (f *fakeQuery) Find(params interface{}, sortOrder string) (chan string, error) {
 	return nil, errors.New("Not implemented")
 }
