@@ -211,6 +211,14 @@ func TestManagerInterface(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(len(dbList), ShouldBeGreaterThan, 0)
 	})
+	Convey("Check if test database has collections", t, func() {
+		ev, err := Dial(mongoURL, dbName, "test")
+		So(err, ShouldBeNil)
+		collections, err := ev.Manager().CollectionNames()
+		So(err, ShouldBeNil)
+		So(len(collections), ShouldBeGreaterThan, 0)
+	})
+
 }
 func sampleHandler(ctx context.Context, events []interface{}) {
 	for _, event := range events {

@@ -79,6 +79,7 @@ type (
 		//TODO:20 Remove after testing will be updated
 		DropDatabase(databaseName string) error
 		DatabaseNames() ([]string, error)
+		CollectionNames() ([]string, error)
 	}
 
 	//Query interface to support query from database
@@ -428,6 +429,10 @@ func (m *ManageT) DropDatabase(databaseName string) error {
 
 func (m *ManageT) DatabaseNames() ([]string, error) {
 	return m.c.session.DatabaseNames()
+}
+
+func (m *ManageT) CollectionNames() ([]string, error) {
+	return m.c.session.DB(m.c.dbName).CollectionNames()
 }
 
 func (c *ConnectionT) Query() Query {
