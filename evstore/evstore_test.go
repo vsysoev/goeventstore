@@ -165,13 +165,13 @@ func TestQueryInterface(t *testing.T) {
 	})
 }
 func TestManagerInterface(t *testing.T) {
-	//	Convey("Checks if it is ok to drop missed database", t, func() {
-	//		ev, err := Dial(mongoURL, dbName)
-	//		So(err, ShouldBeNil)
-	//		So(ev, ShouldNotBeNil)
-	//		err = ev.Manager().DropDatabase("NONEXISTINGDATABASE")
-	//		So(err, ShouldBeNil)
-	//	})
+	Convey("Checks if it is ok to drop missed database", t, func() {
+		ev, err := Dial(mongoURL, dbName)
+		So(err, ShouldBeNil)
+		So(ev, ShouldNotBeNil)
+		err = ev.Manager().DropDatabase("NONEXISTINGDATABASE")
+		So(err, ShouldBeNil)
+	})
 	Convey("Checks if existing database is realy dropped", t, func() {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
@@ -195,9 +195,9 @@ func TestManagerInterface(t *testing.T) {
 			}
 			So(bExists, ShouldBeTrue)
 		})
-		err = ev.Manager().DropDatabase(dbName)
-		So(err, ShouldBeNil)
 		Convey("Checks if database is realy dropped", func() {
+			err = ev.Manager().DropDatabase(dbName)
+			So(err, ShouldBeNil)
 			names, err := getDatabaseNames()
 			So(err, ShouldBeNil)
 			for n := range names {
@@ -206,20 +206,24 @@ func TestManagerInterface(t *testing.T) {
 			}
 		})
 	})
-	//	Convey("Check if list of existing databases not empty", t, func() {
-	//		ev, err := Dial(mongoURL, dbName)
-	//		So(err, ShouldBeNil)
-	//		dbList, err := ev.Manager().DatabaseNames()
-	//		So(err, ShouldBeNil)
-	//		So(len(dbList), ShouldBeGreaterThan, 0)
-	//	})
-	//	Convey("Check if test database has collections", t, func() {
-	// 	ev, err := Dial(mongoURL, dbName)
-	// 	So(err, ShouldBeNil)
-	// 	collections, err := ev.Manager().CollectionNames()
-	// 	So(err, ShouldBeNil)
-	// 	So(len(collections), ShouldBeGreaterThan, 0)
-	// })
+	Convey("Check if list of existing databases not empty", t, func() {
+		ev, err := Dial(mongoURL, dbName)
+		So(err, ShouldBeNil)
+		dbList, err := ev.Manager().DatabaseNames()
+		So(err, ShouldBeNil)
+		So(len(dbList), ShouldBeGreaterThan, 0)
+	})
+	Convey("Check if test database has collections", t, func() {
+		ev, err := Dial(mongoURL, dbName)
+		So(err, ShouldBeNil)
+		err = ev.Committer().PrepareStream("events")
+		So(err, ShouldBeNil)
+		err = ev.Committer().SubmitEvent("events", "", "test", "{\"message\":\"not empty database\"}")
+		So(err, ShouldBeNil)
+		collections, err := ev.Manager().CollectionNames()
+		So(err, ShouldBeNil)
+		So(len(collections), ShouldBeGreaterThan, 0)
+	})
 
 }
 func sampleHandler(ctx context.Context, events []interface{}) {

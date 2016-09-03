@@ -165,8 +165,7 @@ func (c *CommitterT) SubmitEvent(stream string, sequenceID string, tag string, e
 	}
 	err = c.c.session.DB(c.c.dbName).C(triggerStream).Insert(bson.M{"trigger": 1})
 	log.Println("Normal exit from SubmitEvent ", c.c.dbName, triggerStream, stream)
-	panic("Panic from SubmitEvent")
-	// return err
+	return err
 }
 
 // SubmitMapString submittes event to event store
