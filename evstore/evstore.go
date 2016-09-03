@@ -15,20 +15,19 @@ import (
 )
 
 const (
-	chanBufSize int = 1024
+	chanBufSize   int = 1024
+	triggerSuffix     = "_capped"
 )
 
 type (
 	// Connection exports mondodb connection attributes
 	ConnectionT struct {
-		session       *mgo.Session
-		dbName        string
-		stream        string
-		triggerStream string
-		l             *ListennerT
-		c             *CommitterT
-		m             *ManageT
-		q             *QueryT
+		session *mgo.Session
+		dbName  string
+		l       *ListennerT
+		c       *CommitterT
+		m       *ManageT
+		q       *QueryT
 	}
 	// CommitterT exports Committer interface
 	CommitterT struct {
@@ -54,12 +53,13 @@ type (
 
 	// Committer interface defines method to commit new event to eventstore
 	Committer interface {
-		SubmitEvent(sequenceID string, tag string, eventJSON string) error
-		SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error
+		PrepareStream(stream string) error
+		SubmitEvent(stream string, sequenceID string, tag string, eventJSON string) error
+		SubmitMapStringEvent(stream string, sequenceID string, tag string, body map[string]interface{}) error
 	}
 	// Listenner interface defines method to listen events from the datastore
 	Listenner interface {
-		Subscribe(fromID string) (chan string, error)
+		Subscribe(stream string, fromID string) (chan string, error)
 		Unsubscribe(eventChannel chan string)
 	}
 
@@ -68,10 +68,10 @@ type (
 	// Listenner2 interface is replacement of Listenner
 	// TODO:10 Remove Listenner interface and rename Listenner2 to Listenner
 	Listenner2 interface {
-		Subscribe2(eventTypes string, handlerFunc Handler) error
-		Unsubscribe2(eventTypes string)
-		GetLastID() string
-		Listen(ctx context.Context, id string) error
+		Subscribe2(stream string, eventTypes string, handlerFunc Handler) error
+		Unsubscribe2(stream string, eventTypes string)
+		GetLastID(stream string) string
+		Listen(ctx context.Context, stream string, id string) error
 	}
 	// Manager interface to support internal database functions
 	Manager interface {
@@ -85,9 +85,9 @@ type (
 	//Query interface to support query from database
 	Query interface {
 		//Find - return channel with JSON database
-		Find(queryParam interface{}, sortOrder string) (chan string, error)
-		FindOne(queryParam interface{}, sortOrder string) (chan string, error)
-		Pipe(interface{}) (chan string, error)
+		Find(stream string, queryParam interface{}, sortOrder string) (chan string, error)
+		FindOne(stream string, queryParam interface{}, sortOrder string) (chan string, error)
+		Pipe(stream string, aggregationPipeline interface{}) (chan string, error)
 	}
 	//Connection interface
 	Connection interface {
@@ -104,27 +104,15 @@ type (
 // url - path to the mongodb server for ex. mongodb://127.0.0.1
 // dbName - database name where events are stored
 // stream - collection name where events are stored. EventSourcing stream
-func Dial(url string, dbName string, stream string) (Connection, error) {
+func Dial(url string, dbName string) (Connection, error) {
 	var err error
 	c := ConnectionT{}
+	log.Println("URL to db server", url)
 	c.session, err = mgo.Dial(url)
 	if err != nil {
 		return nil, err
 	}
 	c.dbName = dbName
-	c.stream = stream
-	c.triggerStream = stream + "_capped"
-	collections, err := c.session.DB(dbName).CollectionNames()
-	if err != nil {
-		return nil, err
-	}
-	if !contains(collections, c.triggerStream) {
-		cInfo := mgo.CollectionInfo{
-			Capped:   true,
-			MaxBytes: 1000000,
-		}
-		c.session.DB(dbName).C(c.triggerStream).Create(&cInfo)
-	}
 	c.l = &ListennerT{}
 	c.m = &ManageT{}
 	c.c = &CommitterT{}
@@ -153,13 +141,14 @@ func (c *ConnectionT) Listenner() Listenner {
 }
 
 // SubmitEvent submittes event to event store
-func (c *CommitterT) SubmitEvent(sequenceID string, tag string, eventJSON string) error {
+func (c *CommitterT) SubmitEvent(stream string, sequenceID string, tag string, eventJSON string) error {
 	var object map[string]interface{}
 	err := json.Unmarshal([]byte(eventJSON), &object)
 	if err != nil {
-		log.Println(err)
 		return err
 	}
+	triggerStream := stream + triggerSuffix
+	log.Println("trigger stream is ", triggerStream)
 	//	nowString := time.Now().Format(time.RFC3339Nano)
 	// := map[string]interface{}{"$date": nowString}
 	event := make(map[string]interface{})
@@ -168,39 +157,59 @@ func (c *CommitterT) SubmitEvent(sequenceID string, tag string, eventJSON string
 	//	event["datestamp"] = datestamp
 	event["timestamp"] = time.Now()
 	event["event"] = object
-	err = c.c.session.DB(c.c.dbName).C(c.c.stream).Insert(event)
+	log.Println("Database name is ", c.c.dbName, stream, event)
+	err = c.c.session.DB(c.c.dbName).C(stream).Insert(event)
+	log.Println("DBNAME ", err)
 	if err != nil {
-		log.Println(err)
 		return err
 	}
-	err = c.c.session.DB(c.c.dbName).C(c.c.triggerStream).Insert(bson.M{"trigger": 1})
-	if err != nil {
-		log.Println(err)
-	}
-	return err
+	err = c.c.session.DB(c.c.dbName).C(triggerStream).Insert(bson.M{"trigger": 1})
+	log.Println("Normal exit from SubmitEvent ", c.c.dbName, triggerStream, stream)
+	panic("Panic from SubmitEvent")
+	// return err
 }
 
 // SubmitMapString submittes event to event store
-func (c *CommitterT) SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error {
+func (c *CommitterT) SubmitMapStringEvent(stream string, sequenceID string, tag string, body map[string]interface{}) error {
+	triggerStream := stream + triggerSuffix
 	event := make(map[string]interface{})
 	event["sequenceID"] = sequenceID
 	event["tag"] = tag
 	event["event"] = body
 	event["timestamp"] = time.Now()
-	err := c.c.session.DB(c.c.dbName).C(c.c.stream).Insert(event)
+	err := c.c.session.DB(c.c.dbName).C(stream).Insert(event)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	err = c.c.session.DB(c.c.dbName).C(c.c.triggerStream).Insert(bson.M{"trigger": 1})
+	err = c.c.session.DB(c.c.dbName).C(triggerStream).Insert(bson.M{"trigger": 1})
 	if err != nil {
 		log.Println(err)
 	}
 	return err
 }
 
+func (c *CommitterT) PrepareStream(stream string) error {
+	triggerStream := stream + triggerSuffix
+	log.Println("Enter PrepareStream")
+	collections, err := c.c.session.DB(c.c.dbName).CollectionNames()
+	if err != nil {
+		return err
+	}
+	if !contains(collections, triggerStream) {
+		cInfo := mgo.CollectionInfo{
+			Capped:   true,
+			MaxBytes: 1000000,
+		}
+		err = c.c.session.DB(c.c.dbName).C(triggerStream).Create(&cInfo)
+		log.Println("triggerStream created ", c.c.dbName, triggerStream)
+	}
+	log.Println("Exit PrepareStream with error ", err)
+	return err
+}
+
 // ReadEvents Read JSON events started from fromId to slice of strings
-func (c *ConnectionT) readEvents(fromID string) (*mgo.Iter, error) {
+func (c *ConnectionT) readEvents(stream string, fromID string) (*mgo.Iter, error) {
 	var (
 		iter *mgo.Iter
 	)
@@ -209,19 +218,20 @@ func (c *ConnectionT) readEvents(fromID string) (*mgo.Iter, error) {
 			return nil, errors.New("Error: Incorrect fromID " + fromID)
 		}
 		objID := bson.ObjectIdHex(fromID)
-		iter = c.session.DB(c.dbName).C(c.stream).Find(bson.M{"_id": bson.M{"$gt": objID}}).Iter()
+		iter = c.session.DB(c.dbName).C(stream).Find(bson.M{"_id": bson.M{"$gt": objID}}).Iter()
 	} else {
-		iter = c.session.DB(c.dbName).C(c.stream).Find(nil).Iter()
+		iter = c.session.DB(c.dbName).C(stream).Find(nil).Iter()
 	}
 	return iter, nil
 }
 
 // Subscribe returns channel from event store
-func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
+func (e *ListennerT) Subscribe(stream string, fromID string) (chan string, error) {
 	if e.c.session == nil {
 		return nil, errors.New("Mongo isn't connected. Please use Dial().")
 	}
-	cTrigger := e.c.session.DB(e.c.dbName).C(e.c.triggerStream)
+	triggerStream := stream + triggerSuffix
+	cTrigger := e.c.session.DB(e.c.dbName).C(triggerStream)
 	var lastTriggerID string
 	var lastEventID string
 	if fromID != "" {
@@ -249,7 +259,7 @@ func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
 		for {
 			for iter.Next(&result) {
 				lastTriggerID = result["_id"].(bson.ObjectId).Hex()
-				evIter, err := e.c.readEvents(lastEventID)
+				evIter, err := e.c.readEvents(stream, lastEventID)
 				if err != nil {
 					log.Println(err)
 					return
@@ -315,7 +325,7 @@ func (c *ConnectionT) Listenner2() Listenner2 {
 }
 
 // Subscribe2 - new implementation of Subscribe fucntion. Will replace Subscribe
-func (e *ListennerT) Subscribe2(eventType string, handlerFunc Handler) error {
+func (e *ListennerT) Subscribe2(stream string, eventType string, handlerFunc Handler) error {
 	if eventType != "" {
 		if len(e.filter) == 0 {
 			e.filter = make(map[string]Handler)
@@ -330,14 +340,14 @@ func (e *ListennerT) Subscribe2(eventType string, handlerFunc Handler) error {
 }
 
 // Unsubscribe2 - new implementation of Unsubscribe function.
-func (e *ListennerT) Unsubscribe2(eventType string) {
+func (e *ListennerT) Unsubscribe2(stream string, eventType string) {
 	return
 }
 
 // GetLastID - returns last event id
-func (e *ListennerT) GetLastID() string {
+func (e *ListennerT) GetLastID(stream string) string {
 	var result map[string]interface{}
-	iter := e.c.session.DB(e.c.dbName).C(e.c.stream).Find(nil).Sort("-$natural").Limit(1).Iter()
+	iter := e.c.session.DB(e.c.dbName).C(stream).Find(nil).Sort("-$natural").Limit(1).Iter()
 	if iter == nil {
 		return ""
 	}
@@ -349,17 +359,17 @@ func (e *ListennerT) GetLastID() string {
 }
 
 // Listen start go routines which listen event in event stream and execute Handler
-func (e *ListennerT) Listen(ctx context.Context, id string) error {
+func (e *ListennerT) Listen(ctx context.Context, stream string, id string) error {
 	if e.c.session == nil {
 		return errors.New("Mongo isn't connected. Please use Dial().")
 	}
 	for filter, handler := range e.filter {
-		go e.processSubscription(ctx, filter, id, handler)
+		go e.processSubscription(ctx, stream, filter, id, handler)
 	}
 	<-ctx.Done()
 	return nil
 }
-func (c *ConnectionT) readEventsLimit(filter string, fromID string, limit int) ([]interface{}, error) {
+func (c *ConnectionT) readEventsLimit(stream string, filter string, fromID string, limit int) ([]interface{}, error) {
 	var (
 		err    error
 		result []interface{}
@@ -379,18 +389,18 @@ func (c *ConnectionT) readEventsLimit(filter string, fromID string, limit int) (
 		objID := bson.ObjectIdHex(fromID)
 		q["_id"] = bson.M{"$gt": objID}
 	}
-	err = sessionCopy.DB(c.dbName).C(c.stream).Find(q).Limit(limit).All(&result)
+	err = sessionCopy.DB(c.dbName).C(stream).Find(q).Limit(limit).All(&result)
 	return result, err
 }
 
-func (e *ListennerT) processSubscription(ctx context.Context, filter string, id string, handler Handler) {
+func (e *ListennerT) processSubscription(ctx context.Context, stream string, filter string, id string, handler Handler) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Handler function panic detected. Recovering", r)
 		}
 	}()
 	for {
-		result, err := e.c.readEventsLimit(filter, id, 1000)
+		result, err := e.c.readEventsLimit(stream, filter, id, 1000)
 		if err != nil {
 			log.Println(err)
 			return
@@ -440,7 +450,7 @@ func (c *ConnectionT) Query() Query {
 }
 
 // Query request data from database
-func (q *QueryT) Find(queryParam interface{}, sortOrder string) (chan string, error) {
+func (q *QueryT) Find(stream string, queryParam interface{}, sortOrder string) (chan string, error) {
 	ch := make(chan string, 256)
 
 	go func() {
@@ -450,9 +460,9 @@ func (q *QueryT) Find(queryParam interface{}, sortOrder string) (chan string, er
 		)
 		defer close(ch)
 		if sortOrder != "" {
-			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).Sort(sortOrder).Iter()
+			iter = q.c.session.DB(q.c.dbName).C(stream).Find(queryParam).Sort(sortOrder).Iter()
 		} else {
-			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).Iter()
+			iter = q.c.session.DB(q.c.dbName).C(stream).Find(queryParam).Iter()
 		}
 		if iter == nil {
 			return
@@ -476,7 +486,7 @@ func (q *QueryT) Find(queryParam interface{}, sortOrder string) (chan string, er
 }
 
 // Query request data from database
-func (q *QueryT) FindOne(queryParam interface{}, sortOrder string) (chan string, error) {
+func (q *QueryT) FindOne(stream string, queryParam interface{}, sortOrder string) (chan string, error) {
 	ch := make(chan string, 256)
 
 	go func() {
@@ -488,9 +498,9 @@ func (q *QueryT) FindOne(queryParam interface{}, sortOrder string) (chan string,
 			close(ch)
 		}()
 		if sortOrder != "" {
-			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).Sort(sortOrder).Limit(1).Iter()
+			iter = q.c.session.DB(q.c.dbName).C(stream).Find(queryParam).Sort(sortOrder).Limit(1).Iter()
 		} else {
-			iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Find(queryParam).Limit(1).Iter()
+			iter = q.c.session.DB(q.c.dbName).C(stream).Find(queryParam).Limit(1).Iter()
 		}
 		if iter == nil {
 			return
@@ -513,7 +523,7 @@ func (q *QueryT) FindOne(queryParam interface{}, sortOrder string) (chan string,
 
 	return ch, nil
 }
-func (q *QueryT) Pipe(aggregationPipeline interface{}) (chan string, error) {
+func (q *QueryT) Pipe(stream string, aggregationPipeline interface{}) (chan string, error) {
 	ch := make(chan string, 256)
 
 	go func() {
@@ -522,7 +532,7 @@ func (q *QueryT) Pipe(aggregationPipeline interface{}) (chan string, error) {
 			iter   *mgo.Iter
 		)
 		defer close(ch)
-		iter = q.c.session.DB(q.c.dbName).C(q.c.stream).Pipe(aggregationPipeline).Iter()
+		iter = q.c.session.DB(q.c.dbName).C(stream).Pipe(aggregationPipeline).Iter()
 		defer iter.Close()
 		if iter.Err() != nil {
 			ch <- iter.Err().Error()
