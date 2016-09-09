@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/mgo.v2/bson"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
@@ -119,7 +119,7 @@ func main() {
 	flag.Parse()
 	props := property.Init()
 
-	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.stream"])
+	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"])
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}
@@ -131,7 +131,7 @@ func main() {
 	currentConfig.mx = &sync.Mutex{}
 	isCurrent = false
 	stateUpdateChannel := make(chan *bson.M, 256)
-	err = evStore.Listenner2().Subscribe2("config", configHandler)
+	err = evStore.Listenner2(props["configsrv.stream"]).Subscribe2("config", configHandler)
 	if err != nil {
 		log.Fatalln("Error subscribing for config changes", err)
 	}
@@ -139,7 +139,7 @@ func main() {
 	ctx := context.WithValue(ctx1, "stateUpdateChannel", stateUpdateChannel)
 	defer cancel()
 	log.Println("Before Listen call")
-	go evStore.Listenner2().Listen(ctx, id)
+	go evStore.Listenner2(props["configsrv.stream"]).Listen(ctx, id)
 
 	go processClientConnection(ctx, wsServer)
 	go wsServer.Listen()

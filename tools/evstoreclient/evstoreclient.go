@@ -16,12 +16,12 @@ import (
 	"strconv"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/vsysoev/goeventstore/evstore"
 )
 
-func send2EventStore(r *bufio.Reader, evStore evstore.Connection) {
+func send2EventStore(r *bufio.Reader, evStore evstore.Connection, stream string) {
 	for {
 		s, _, err := r.ReadLine()
 		if err == io.EOF {
@@ -31,7 +31,7 @@ func send2EventStore(r *bufio.Reader, evStore evstore.Connection) {
 			return
 		}
 		fmt.Println(string(s))
-		err = evStore.Committer().SubmitEvent("", "scalar", string(s))
+		err = evStore.Committer(stream).SubmitEvent("", "scalar", string(s))
 		if err != nil {
 			log.Println(err)
 		}
@@ -95,7 +95,7 @@ Loop:
 		}
 	}
 }
-func genDataFromGenFile(ctx context.Context, genFile *bufio.Reader, evStore evstore.Connection) {
+func genDataFromGenFile(ctx context.Context, genFile *bufio.Reader, evStore evstore.Connection, stream string) {
 	chanInput := make(chan string, 1)
 	for {
 		s, _, err := genFile.ReadLine()
@@ -116,7 +116,7 @@ Loop:
 			break Loop
 		case msg := <-chanInput:
 			log.Println(msg)
-			evStore.Committer().SubmitEvent("", "scalar", msg)
+			evStore.Committer(stream).SubmitEvent("", "scalar", msg)
 		}
 	}
 }
@@ -136,7 +136,7 @@ func main() {
 	flag.StringVar(&msg, "msg", "", "Message to send to database")
 	flag.StringVar(&genFile, "gen", "", "Genfile with information")
 	flag.Parse()
-	evStore, err := evstore.Dial(uri, dbName, collectionName)
+	evStore, err := evstore.Dial(uri, dbName)
 	if err != nil {
 		log.Panicln(err)
 	}
@@ -149,10 +149,10 @@ func main() {
 			log.Panicln(err)
 		}
 		r := bufio.NewReader(f)
-		send2EventStore(r, evStore)
+		send2EventStore(r, evStore, collectionName)
 	}
 	if msg != "" {
-		err = evStore.Committer().SubmitEvent("", "scalar", msg)
+		err = evStore.Committer(collectionName).SubmitEvent("", "scalar", msg)
 		if err != nil {
 			log.Panicln(err)
 		}
@@ -167,7 +167,7 @@ func main() {
 		}
 		r := bufio.NewReader(f)
 		log.Println("Start GenDataFromGenFile")
-		genDataFromGenFile(context.Background(), r, evStore)
+		genDataFromGenFile(context.Background(), r, evStore, collectionName)
 	}
 	evStore.Close()
 }

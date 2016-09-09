@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 	"golang.org/x/net/websocket"
 
 	"gopkg.in/mgo.v2"
@@ -58,6 +58,8 @@ func CleanupCollections() {
 	session, _ := mgo.Dial(props["mongodb.url"])
 	_ = session.DB(dbName).C("submitevents").DropCollection()
 	_ = session.DB(dbName).C("submitevents_capped").DropCollection()
+	_ = session.DB(dbName).C("test").DropCollection()
+	_ = session.DB(dbName).C("test_capped").DropCollection()
 }
 
 func TestSubmitEvent(t *testing.T) {
@@ -67,7 +69,7 @@ func TestSubmitEvent(t *testing.T) {
 		)
 		props := property.Init()
 		CleanupCollections()
-		ev, err := evstore.Dial(props["mongodb.url"], dbName, "submitevents")
+		ev, err := evstore.Dial(props["mongodb.url"], dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 		c := makeStubClient()
@@ -85,7 +87,7 @@ func TestSubmitEvent(t *testing.T) {
 		defer session.Close()
 		So(err, ShouldBeNil)
 		So(session, ShouldNotBeNil)
-		iter := session.DB(dbName).C("submitevents").Find(nil).Iter()
+		iter := session.DB(dbName).C("test").Find(nil).Iter()
 		So(iter, ShouldNotBeNil)
 
 		iter.All(&results)
@@ -102,7 +104,7 @@ func TestSubmitErrorEvent(t *testing.T) {
 		)
 		props := property.Init()
 		CleanupCollections()
-		ev, err := evstore.Dial(props["mongodb.url"], dbName, "submitevents")
+		ev, err := evstore.Dial(props["mongodb.url"], dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 		c := makeStubClient()
@@ -134,7 +136,7 @@ func TestSubmitErrorEvent(t *testing.T) {
 		)
 		props := property.Init()
 		CleanupCollections()
-		ev, err := evstore.Dial(props["mongodb.url"], dbName, "submitevents")
+		ev, err := evstore.Dial(props["mongodb.url"], dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 		c := makeStubClient()
@@ -154,7 +156,7 @@ func TestSubmitErrorEvent(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(session, ShouldNotBeNil)
 		defer session.Close()
-		iter := session.DB(dbName).C("submitevents").Find(nil).Iter()
+		iter := session.DB(dbName).C("test").Find(nil).Iter()
 		So(iter, ShouldNotBeNil)
 		iter.All(&results)
 		So(results, ShouldBeNil)

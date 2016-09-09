@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/vsysoev/goeventstore/evstore"
@@ -27,16 +27,16 @@ func handlerTest(ctx context.Context, events []interface{}) {
 }
 func TestEventSrv(t *testing.T) {
 	Convey("When commit current message to database", t, func() {
-		ev, err := evstore.Dial(mongoURL, dbName, "events")
+		ev, err := evstore.Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 
-		err = ev.Listenner2().Subscribe2("", handlerTest)
+		err = ev.Listenner2("events").Subscribe2("", handlerTest)
 		So(err, ShouldBeNil)
 		ctx := context.WithValue(context.Background(), "test", t)
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-		go ev.Listenner2().Listen(ctx, "")
+		go ev.Listenner2("events").Listen(ctx, "")
 		<-time.After(time.Second * 2)
 
 		fmt.Println("All messages read")
@@ -48,7 +48,7 @@ func TestEventSrv(t *testing.T) {
 			varID := strconv.Itoa(rand.Intn(200))
 			val := strconv.FormatFloat(rand.NormFloat64(), 'f', 2, 64)
 			sendMsg := "{\"datestamp\":\"" + timestamp + "\", \"box_id\": " + boxID + ", \"var_id\": " + varID + ", \"value\": " + val + "}"
-			err = ev.Committer().SubmitEvent("123", "scalar", sendMsg)
+			err = ev.Committer("events").SubmitEvent("123", "scalar", sendMsg)
 			So(err, ShouldBeNil)
 		}
 		<-time.After(time.Second * 3)

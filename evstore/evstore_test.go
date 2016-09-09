@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -46,24 +46,24 @@ func TestListen2Interface(t *testing.T) {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
-		err = ev.Listenner2().Subscribe2("events", "scalar", sampleHandler)
+		err = ev.Listenner2("events").Subscribe2("scalar", sampleHandler)
 		So(err, ShouldBeNil)
 		ctx, _ := context.WithTimeout(context.Background(), time.Second*3)
-		go ev.Listenner2().Listen(ctx, "events", "")
+		go ev.Listenner2("events").Listen(ctx, "")
 		<-ctx.Done()
-		ev.Listenner2().Unsubscribe2("events", "scalar")
+		ev.Listenner2("events").Unsubscribe2("scalar")
 		ev.Close()
 	})
 	Convey("When do panic in handler should not panic", t, func() {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
-		err = ev.Listenner2().Subscribe2("events", "scalar", panicHandler)
+		err = ev.Listenner2("events").Subscribe2("scalar", panicHandler)
 		So(err, ShouldBeNil)
 		ctx, _ := context.WithTimeout(context.Background(), time.Second*3)
-		go ev.Listenner2().Listen(ctx, "events", "")
+		go ev.Listenner2("events").Listen(ctx, "")
 		<-ctx.Done()
-		ev.Listenner2().Unsubscribe2("events", "scalar")
+		ev.Listenner2("events").Unsubscribe2("scalar")
 		ev.Close()
 	})
 	Convey("Check if LastId isn't empty string", t, func() {
@@ -71,9 +71,9 @@ func TestListen2Interface(t *testing.T) {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
-		ev.Committer().SubmitEvent("events", "", "fake", "{\"event\":\"fake\"}")
+		ev.Committer("events").SubmitEvent("", "fake", "{\"event\":\"fake\"}")
 		So(err, ShouldBeNil)
-		id := ev.Listenner2().GetLastID("events")
+		id := ev.Listenner2("events").GetLastID()
 		So(id, ShouldNotEqual, "")
 		ev.Close()
 
@@ -87,18 +87,14 @@ func TestQueryInterface(t *testing.T) {
 		evStore.Manager().DropDatabase(dbName)
 		for i := 0; i < 100; i++ {
 			expected := "{\"message\":" + strconv.Itoa(i) + "}"
-			evStore.Committer().SubmitEvent("test", "", "test", expected)
+			evStore.Committer("test").SubmitEvent("", "test", expected)
 		}
 		Convey("They should be published continousely. And returned in opposit order", func() {
-			c, err := evStore.Query().Find("test", bson.M{}, "-$natural")
+			c, err := evStore.Query("test").Find(bson.M{}, "-$natural")
 			So(err, ShouldBeNil)
 			So(c, ShouldNotBeNil)
 			messageCounter := 0
-			for {
-				msg, ok := <-c
-				if !ok {
-					break
-				}
+			for msg := range c {
 				err = json.Unmarshal([]byte(msg), &m)
 				So(err, ShouldBeNil)
 				So(m["event"].(map[string]interface{})["message"], ShouldEqual, 99-messageCounter)
@@ -114,15 +110,15 @@ func TestQueryInterface(t *testing.T) {
 		evStore.Manager().DropDatabase(dbName)
 		notExpected := "{\"message\":\"NOT expected\"}"
 		expected := "{\"message\":\"expected\"}"
-		evStore.Committer().SubmitEvent("test", "", "test", notExpected)
+		evStore.Committer("test").SubmitEvent("", "test", notExpected)
 		<-time.After(200 * time.Millisecond)
 		tBegin := time.Now()
-		evStore.Committer().SubmitEvent("test", "", "test", expected)
+		evStore.Committer("test").SubmitEvent("", "test", expected)
 		<-time.After(200 * time.Millisecond)
 		tEnd := time.Now()
 		fakePipeline := make([]bson.M, 1)
 		fakePipeline[0] = bson.M{"$match": bson.M{"timestamp": bson.M{"$gte": tBegin, "$lt": tEnd}}}
-		c, err := evStore.Query().Pipe("test", fakePipeline)
+		c, err := evStore.Query("test").Pipe(fakePipeline)
 		So(err, ShouldBeNil)
 		So(c, ShouldNotBeNil)
 		msg, ok := <-c
@@ -141,18 +137,14 @@ func TestQueryInterface(t *testing.T) {
 		evStore.Manager().DropDatabase(dbName)
 		for i := 0; i < 100; i++ {
 			expected := "{\"message\":" + strconv.Itoa(i) + "}"
-			evStore.Committer().SubmitEvent("test", "", "test", expected)
+			evStore.Committer("test").SubmitEvent("", "test", expected)
 		}
 		Convey("First Event should have value 0", func() {
-			c, err := evStore.Query().FindOne("test", bson.M{}, "$natural")
+			c, err := evStore.Query("test").FindOne(bson.M{}, "$natural")
 			So(err, ShouldBeNil)
 			So(c, ShouldNotBeNil)
 			messageCounter := 0
-			for {
-				msg, ok := <-c
-				if !ok {
-					break
-				}
+			for msg := range c {
 				err = json.Unmarshal([]byte(msg), &m)
 				So(err, ShouldBeNil)
 				So(m["event"].(map[string]interface{})["message"], ShouldEqual, 0)
@@ -177,14 +169,14 @@ func TestManagerInterface(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 		Convey("Submit some data to "+dbName+" database", func() {
-			err = ev.Committer().PrepareStream("events")
+			err = ev.Committer("events").PrepareStream()
 			So(err, ShouldBeNil)
-			err = ev.Committer().SubmitEvent("events", "", "test", "{\"message\":\"not empty database\"}")
+			err = ev.Committer("events").SubmitEvent("", "test", "{\"message\":\"not empty database\"}")
 			So(err, ShouldBeNil)
 		})
 		Convey("Checks if test database exists", func() {
-			names, err := getDatabaseNames()
-			So(err, ShouldBeNil)
+			names, err1 := getDatabaseNames()
+			So(err1, ShouldBeNil)
 			bExists := false
 			log.Println(names)
 			for n := range names {
@@ -216,9 +208,9 @@ func TestManagerInterface(t *testing.T) {
 	Convey("Check if test database has collections", t, func() {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
-		err = ev.Committer().PrepareStream("events")
+		err = ev.Committer("events").PrepareStream()
 		So(err, ShouldBeNil)
-		err = ev.Committer().SubmitEvent("events", "", "test", "{\"message\":\"not empty database\"}")
+		err = ev.Committer("events").SubmitEvent("", "test", "{\"message\":\"not empty database\"}")
 		So(err, ShouldBeNil)
 		collections, err := ev.Manager().CollectionNames()
 		So(err, ShouldBeNil)

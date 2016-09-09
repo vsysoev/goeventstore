@@ -8,7 +8,7 @@ import (
 
 	"github.com/vsysoev/goeventstore/wsock"
 
-	"golang.org/x/net/context"
+	"context"
 	"golang.org/x/net/websocket"
 )
 
@@ -67,20 +67,20 @@ func TestClientHandler(t *testing.T) {
 func TestClientGetHistory(t *testing.T) {
 	c := NewFakeClient()
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := RPCFunction{evStore}
 	msg1 := "{\"message\":\"NOT expected\"}"
-	evStore.Committer().SubmitEvent("", "scalar", msg1)
+	evStore.Committer("test").SubmitEvent("", "scalar", msg1)
 	<-time.After(1 * time.Second)
 	tStart := time.Now()
 	<-time.After(1 * time.Second)
-	submitNScalars(evStore, 10, 1, 1, 100*time.Millisecond)
+	submitNScalars(evStore, "test", 10, 1, 1, 100*time.Millisecond)
 	tStop := time.Now()
 	<-time.After(2 * time.Second)
-	evStore.Committer().SubmitEvent("", "scalar", msg1)
+	evStore.Committer("test").SubmitEvent("", "scalar", msg1)
 	log.Println(tStart, " < ", tStop)
 
 	go clientHandler(ctx, c, &f)
@@ -102,14 +102,14 @@ func TestClientGetHistory(t *testing.T) {
 func TestClientGetLastEventByFilter(t *testing.T) {
 	c := NewFakeClient()
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := RPCFunction{evStore}
-	submitNScalars(evStore, 10, 1, 1, 0)
-	submitNScalars(evStore, 3, 2, 1, 0)
-	submitNScalars(evStore, 100, 1, 1, 0)
+	submitNScalars(evStore, "test", 10, 1, 1, 0)
+	submitNScalars(evStore, "test", 3, 2, 1, 0)
+	submitNScalars(evStore, "test", 100, 1, 1, 0)
 	go clientHandler(ctx, c, &f)
 	toClient, fromClient, _ := c.GetChannels()
 	msg := wsock.MessageT{}
@@ -127,14 +127,14 @@ func TestClientGetLastEventByFilter(t *testing.T) {
 func TestClientGetFirstEventByFilter(t *testing.T) {
 	c := NewFakeClient()
 	ctx, cancelFunc := context.WithCancel(context.Background())
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	f := RPCFunction{evStore}
-	submitNScalars(evStore, 10, 1, 1, 0)
-	submitNScalars(evStore, 3, 2, 1, 0)
-	submitNScalars(evStore, 100, 1, 1, 0)
+	submitNScalars(evStore, "test", 10, 1, 1, 0)
+	submitNScalars(evStore, "test", 3, 2, 1, 0)
+	submitNScalars(evStore, "test", 100, 1, 1, 0)
 	go clientHandler(ctx, c, &f)
 	toClient, fromClient, _ := c.GetChannels()
 	msg := wsock.MessageT{}

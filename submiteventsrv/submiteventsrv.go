@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
@@ -54,7 +54,7 @@ Loop:
 				response["msg"] = "No event"
 			}
 			if response["reply"] == "ok" {
-				err := e.Committer().SubmitMapStringEvent(seqid, tag, ev)
+				err := e.Committer(tag).SubmitMapStringEvent(seqid, tag, ev)
 				if err != nil {
 					response["reply"] = "ERROR"
 					response["msg"] = "Submit to eventstore failed"
@@ -92,7 +92,7 @@ Loop:
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			log.Println("Stream name", streamName)
-			evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], streamName)
+			evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"])
 			defer evStore.Close()
 			if err != nil {
 				log.Fatalln("Error connecting to event store. ", err)
@@ -155,12 +155,12 @@ func submitEvent2Datastore(url string,
 	seqid string,
 	tag string,
 	event map[string]interface{}) error {
-	ev, err := evstore.Dial(url, database, streamName)
+	ev, err := evstore.Dial(url, database)
 	if err != nil {
 		return err
 	}
 	defer ev.Close()
-	err = ev.Committer().SubmitMapStringEvent(seqid, tag, event)
+	err = ev.Committer(tag).SubmitMapStringEvent(seqid, tag, event)
 	if err != nil {
 		return err
 	}

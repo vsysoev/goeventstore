@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
@@ -44,9 +44,10 @@ func clientHandler(ctx context.Context, c *wsock.Client, evStore evstore.Connect
 	log.Println("clientProcessor Client connected. ", c.Request())
 	id := c.Request().FormValue("id")
 	tag := c.Request().FormValue("tag")
+	stream := c.Request().FormValue("stream")
 	_, toWS, doneCh := c.GetChannels()
 	if tag != "" {
-		err = evStore.Listenner2().Subscribe2(tag, messageHandler)
+		err = evStore.Listenner2(stream).Subscribe2(tag, messageHandler)
 		if err != nil {
 			log.Println("Can't subscribe to evStore", err)
 			return
@@ -54,7 +55,7 @@ func clientHandler(ctx context.Context, c *wsock.Client, evStore evstore.Connect
 		ctx2 := context.WithValue(ctx, "toWS", toWS)
 		ctx3, cancel := context.WithCancel(ctx2)
 		defer cancel()
-		go evStore.Listenner2().Listen(ctx3, id)
+		go evStore.Listenner2(stream).Listen(ctx3, id)
 	} else {
 		js := wsock.MessageT{}
 		js["response"] = "ERROR: No tag to subscribe"
@@ -116,7 +117,7 @@ func main() {
 	}()
 
 	props := property.Init()
-	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.stream"])
+	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"])
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}

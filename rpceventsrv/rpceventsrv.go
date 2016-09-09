@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
@@ -189,12 +189,11 @@ func (f *RPCFunction) GetLastEvent(params RPCParameterInterface) (interface{}, e
 	if err != nil {
 		return nil, err
 	}
-
 	requestParameter, err := prepareRequest(tag, filter)
 	if err != nil {
 		return nil, err
 	}
-	ch, err := f.evStore.Query().FindOne(requestParameter, sortOrder)
+	ch, err := f.evStore.Query(tag).FindOne(requestParameter, sortOrder)
 	return ch, err
 }
 
@@ -226,8 +225,7 @@ func (f *RPCFunction) GetHistory(params RPCParameterInterface) (interface{}, err
 	requestParameter["timestamp"] = make(map[string]interface{})
 	requestParameter["timestamp"].(map[string]interface{})["$gt"] = from
 	requestParameter["timestamp"].(map[string]interface{})["$lt"] = to
-	log.Println(requestParameter)
-	ch, err := f.evStore.Query().Find(requestParameter, sortOrder)
+	ch, err := f.evStore.Query(tag).Find(requestParameter, sortOrder)
 	return ch, err
 
 }
@@ -271,7 +269,7 @@ func (f *RPCFunction) GetDistanceValue(params RPCParameterInterface) (interface{
 	requestParameter["timestamp"].(map[string]interface{})["$lt"] = to
 	nanosecondsInOneInterval := to.Sub(from) / time.Duration(numberOfPoints)
 	currentPoint := to
-	ch, err := f.evStore.Query().Find(requestParameter, sortOrder)
+	ch, err := f.evStore.Query(tag).Find(requestParameter, sortOrder)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +345,7 @@ func (f *RPCFunction) GetFirstEvent(params RPCParameterInterface) (interface{}, 
 	if err != nil {
 		return nil, err
 	}
-	ch, err := f.evStore.Query().FindOne(requestParameter, sortOrder)
+	ch, err := f.evStore.Query(tag).FindOne(requestParameter, sortOrder)
 	return ch, err
 }
 
@@ -377,7 +375,7 @@ func (f *RPCFunction) GetEventAt(params RPCParameterInterface) (chan string, err
 	requestParameter["timestamp"] = make(map[string]interface{})
 	requestParameter["timestamp"].(map[string]interface{})["$lte"] = tPoint
 	log.Println(requestParameter)
-	ch, err := f.evStore.Query().FindOne(requestParameter, sortOrder)
+	ch, err := f.evStore.Query(tag).FindOne(requestParameter, sortOrder)
 	return ch, err
 }
 
@@ -542,7 +540,7 @@ Loop:
 func main() {
 
 	props := property.Init()
-	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.stream"])
+	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"])
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}

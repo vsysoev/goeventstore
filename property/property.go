@@ -23,6 +23,7 @@ func Init() PropSet {
 	props["securepostevents.url"] = ":8892"
 	props["configsrv.uri"] = "/config"
 	props["configsrv.url"] = ":8893"
+	props["configsrv.stream"] = "config"
 	props["rpceventsrv.uri"] = "/rpc"
 	props["rpceventsrv.url"] = ":8894"
 	return props

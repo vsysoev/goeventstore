@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/mgo.v2"
 
-	"golang.org/x/net/context"
+	"context"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/vsysoev/goeventstore/evstore"
@@ -36,11 +36,11 @@ func TestDropDatabase(t *testing.T) {
 }
 func TestCurrentScalarState(t *testing.T) {
 	Convey("When commit current message to database", t, func() {
-		ev, err := evstore.Dial(mongoURL, "test", "events")
+		ev, err := evstore.Dial(mongoURL, "test")
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 
-		err = ev.Listenner2().Subscribe2("", Handler)
+		err = ev.Listenner2("events").Subscribe2("", Handler)
 		So(err, ShouldBeNil)
 		//	Loop:
 		fmt.Println("All messages read")
@@ -58,7 +58,7 @@ func TestCurrentScalarState(t *testing.T) {
 			}
 			val := strconv.FormatFloat(rand.NormFloat64(), 'f', 2, 64)
 			sendMsg := "{\"datestamp\":\"" + timestamp + "\", \"box_id\": " + boxID + ", \"var_id\": " + varID + ", \"value\": " + val + "}"
-			err = ev.Committer().SubmitEvent("123", "scalar", sendMsg)
+			err = ev.Committer("events").SubmitEvent("123", "scalar", sendMsg)
 			So(err, ShouldBeNil)
 		}
 		ev.Close()

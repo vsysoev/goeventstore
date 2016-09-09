@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/vsysoev/goeventstore/evstore"
 )
@@ -31,19 +31,19 @@ func NewFakeDB() (evstore.Connection, error) {
 func NewFailedFakeDB() (evstore.Connection, error) {
 	return nil, errors.New("FakeDB Failed to connect")
 }
-func (f *fakeDB) Committer() evstore.Committer {
+func (f *fakeDB) Committer(stream string) evstore.Committer {
 	return &fakeCommitter{}
 }
-func (f *fakeDB) Listenner() evstore.Listenner {
+func (f *fakeDB) Listenner(stream string) evstore.Listenner {
 	return &fakeListenner{}
 }
-func (f *fakeDB) Listenner2() evstore.Listenner2 {
+func (f *fakeDB) Listenner2(stream string) evstore.Listenner2 {
 	return &fakeListenner2{}
 }
 func (f *fakeDB) Manager() evstore.Manager {
 	return &fakeManager{}
 }
-func (f *fakeDB) Query() evstore.Query {
+func (f *fakeDB) Query(stream string) evstore.Query {
 	return &fakeQuery{}
 }
 func (f *fakeDB) Close() {
@@ -53,6 +53,9 @@ func (f *fakeCommitter) SubmitEvent(sequenceID string, tag string, eventJSON str
 	return errors.New("Not implemented")
 }
 func (f *fakeCommitter) SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error {
+	return errors.New("Not implemented")
+}
+func (f *fakeCommitter) PrepareStream() error {
 	return errors.New("Not implemented")
 }
 
@@ -98,8 +101,8 @@ func (f *fakeQuery) Pipe(fakePipeline interface{}) (chan string, error) {
 	return nil, errors.New("Not implemented")
 }
 
-func initEventStore(url string, dbName string, collectionName string) (evstore.Connection, error) {
-	evStore, err := evstore.Dial(url, dbName, collectionName)
+func initEventStore(url string, dbName string) (evstore.Connection, error) {
+	evStore, err := evstore.Dial(url, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -107,10 +110,10 @@ func initEventStore(url string, dbName string, collectionName string) (evstore.C
 	return evStore, err
 }
 
-func submitNScalars(evStore evstore.Connection, number int, box_id int, var_id int, delay time.Duration) error {
+func submitNScalars(evStore evstore.Connection, stream string, number int, box_id int, var_id int, delay time.Duration) error {
 	for n := 0; n < number; n++ {
 		msg := "{\"box_id\":" + strconv.Itoa(box_id) + ", \"var_id\":" + strconv.Itoa(var_id) + ", \"value\":" + strconv.FormatFloat(float64(n), 'f', -1, 32) + "}"
-		err := evStore.Committer().SubmitEvent("", "scalar", msg)
+		err := evStore.Committer(stream).SubmitEvent("", "scalar", msg)
 		if err != nil {
 			return err
 		}
@@ -139,7 +142,7 @@ func TestNilEventStore(t *testing.T) {
 }
 
 func TestNewRPCFunctionInterface(t *testing.T) {
-	c, err := initEventStore("localhost", dbName, "test")
+	c, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal("Error connecting to evstore")
 	}
@@ -164,7 +167,7 @@ func TestNegativeNewRPCFunctionInterface(t *testing.T) {
 }
 
 func TestGetFunction(t *testing.T) {
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +180,7 @@ func TestGetFunction(t *testing.T) {
 	}
 }
 func TestNegativeGetFunction(t *testing.T) {
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +219,7 @@ func TestFailedGetLastEvent(t *testing.T) {
 }
 
 func TestGetHistory(t *testing.T) {
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,14 +231,14 @@ func TestGetHistory(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	msg1 := "{\"message\":\"NOT expected\"}"
-	evStore.Committer().SubmitEvent("", "scalar", msg1)
+	evStore.Committer("scalar").SubmitEvent("", "scalar", msg1)
 	<-time.After(1 * time.Second)
 	tStart := time.Now()
 	<-time.After(1 * time.Second)
-	submitNScalars(evStore, 10, 1, 1, 100*time.Millisecond)
+	submitNScalars(evStore, "scalar", 10, 1, 1, 100*time.Millisecond)
 	tStop := time.Now()
 	<-time.After(2 * time.Second)
-	evStore.Committer().SubmitEvent("", "scalar", msg1)
+	evStore.Committer("scalar").SubmitEvent("", "scalar", msg1)
 	log.Println(tStart, " < ", tStop)
 	p := make(map[string]interface{})
 	p["tag"] = "scalar"
@@ -270,20 +273,20 @@ func TestGetHistory(t *testing.T) {
 }
 
 func TestGetHistoryFilter(t *testing.T) {
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
 	msg1 := "{\"message\":\"NOT expected\"}"
-	evStore.Committer().SubmitEvent("", "scalar", msg1)
+	evStore.Committer("scalar").SubmitEvent("", "scalar", msg1)
 	<-time.After(1 * time.Second)
 	tStart := time.Now()
 	<-time.After(1 * time.Second)
-	submitNScalars(evStore, 10, 1, 1, 100*time.Millisecond)
-	submitNScalars(evStore, 20, 1, 2, 100*time.Millisecond)
+	submitNScalars(evStore, "scalar", 10, 1, 1, 100*time.Millisecond)
+	submitNScalars(evStore, "scalar", 20, 1, 2, 100*time.Millisecond)
 	tStop := time.Now()
 	<-time.After(2 * time.Second)
-	evStore.Committer().SubmitEvent("", "scalar", msg1)
+	evStore.Committer("scalar").SubmitEvent("", "scalar", msg1)
 	log.Println(tStart, " < ", tStop)
 	f, err := getRPCFunction(evStore, "GetHistory")
 	if err != nil {
@@ -331,7 +334,7 @@ func TestGetHistoryFilter(t *testing.T) {
 }
 
 func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +364,7 @@ func TestGetDistanceValueIncorrectPointNumber(t *testing.T) {
 }
 
 func TestGetDistanceValueIncorrectInterval(t *testing.T) {
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +393,7 @@ func TestGetDistanceValueIncorrectInterval(t *testing.T) {
 
 }
 func TestGetDistanceValueZerroInterval(t *testing.T) {
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +425,7 @@ func TestGetDistanceValue(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,14 +437,14 @@ func TestGetDistanceValue(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	msg1 := "{\"message\":\"NOT expected\"}"
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("test").SubmitEvent("", "test", msg1)
 	<-time.After(1 * time.Second)
 	tStart := time.Now()
 	<-time.After(10 * time.Millisecond)
-	submitNScalars(evStore, 100, 1, 1, 100)
+	submitNScalars(evStore, "test", 100, 1, 1, 100)
 	tStop := time.Now()
 	<-time.After(2 * time.Second)
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("scalar").SubmitEvent("", "test", msg1)
 	log.Println(tStart, " < ", tStop)
 	p := make(map[string]interface{})
 	p["id"] = 1
@@ -476,7 +479,7 @@ func TestGetDistanceValueFilter(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,15 +491,15 @@ func TestGetDistanceValueFilter(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	msg1 := "{\"message\":\"NOT expected\"}"
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("scalar").SubmitEvent("", "test", msg1)
 	<-time.After(1 * time.Second)
 	tStart := time.Now()
 	<-time.After(10 * time.Millisecond)
-	submitNScalars(evStore, 100, 1, 1, 100*time.Millisecond)
-	submitNScalars(evStore, 100, 3, 1, 0)
+	submitNScalars(evStore, "test", 100, 1, 1, 100*time.Millisecond)
+	submitNScalars(evStore, "test", 100, 3, 1, 0)
 	tStop := time.Now()
 	<-time.After(2 * time.Second)
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("scalar").SubmitEvent("", "test", msg1)
 	log.Println(tStart, " < ", tStop)
 	p := make(map[string]interface{})
 	p["id"] = 1
@@ -531,7 +534,7 @@ func TestGetFirstEvent(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -543,10 +546,10 @@ func TestGetFirstEvent(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	msg1 := "{\"message\":\"First event\"}"
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("test").SubmitEvent("", "test", msg1)
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "test", msg2)
+		evStore.Committer("test").SubmitEvent("", "test", msg2)
 	}
 	p := make(map[string]interface{})
 	p["id"] = 1
@@ -584,7 +587,7 @@ func TestGetFirstEventByType(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -597,13 +600,13 @@ func TestGetFirstEventByType(t *testing.T) {
 	}
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event before\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "scalar", msg2)
+		evStore.Committer("test").SubmitEvent("", "scalar", msg2)
 	}
 	msg1 := "{\"message\":\"First event of type test\"}"
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("test").SubmitEvent("", "test", msg1)
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "scalar", msg2)
+		evStore.Committer("test").SubmitEvent("", "scalar", msg2)
 	}
 	p := make(map[string]interface{})
 	p["tag"] = "test"
@@ -639,13 +642,13 @@ func TestGetFirstEventByFilter(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	submitNScalars(evStore, 10, 1, 1, 0)
-	submitNScalars(evStore, 3, 2, 1, 0)
-	submitNScalars(evStore, 100, 1, 1, 0)
+	submitNScalars(evStore, "scalar", 10, 1, 1, 0)
+	submitNScalars(evStore, "scalar", 3, 2, 1, 0)
+	submitNScalars(evStore, "scalar", 100, 1, 1, 0)
 	f, err := getRPCFunction(evStore, "GetFirstEvent")
 	if err != nil {
 		t.Fatal(err)
@@ -692,13 +695,13 @@ func TestGetLastEventByFilter(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	submitNScalars(evStore, 10, 1, 1, 0)
-	submitNScalars(evStore, 3, 2, 1, 0)
-	submitNScalars(evStore, 100, 1, 1, 0)
+	submitNScalars(evStore, "scalar", 10, 1, 1, 0)
+	submitNScalars(evStore, "scalar", 3, 2, 1, 0)
+	submitNScalars(evStore, "scalar", 100, 1, 1, 0)
 	f, err := getRPCFunction(evStore, "GetLastEvent")
 	if err != nil {
 		t.Fatal(err)
@@ -746,7 +749,7 @@ func TestGetLastEvent(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -758,13 +761,13 @@ func TestGetLastEvent(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	msg1 := "{\"message\":\"First event\"}"
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("test").SubmitEvent("", "test", msg1)
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "test", msg2)
+		evStore.Committer("test").SubmitEvent("", "test", msg2)
 	}
 	msgLast := "{\"message\":\"Last event\"}"
-	evStore.Committer().SubmitEvent("", "test", msgLast)
+	evStore.Committer("test").SubmitEvent("", "test", msgLast)
 	p := make(map[string]interface{})
 	p["tag"] = "test"
 	p["filter"] = nil
@@ -799,7 +802,7 @@ func TestGetLastEventByType(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -812,13 +815,13 @@ func TestGetLastEventByType(t *testing.T) {
 	}
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event before\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "test", msg2)
+		evStore.Committer("test").SubmitEvent("", "test", msg2)
 	}
 	msg1 := "{\"message\":\"Last event of type test\"}"
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("test").SubmitEvent("", "test", msg1)
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "scalar", msg2)
+		evStore.Committer("test").SubmitEvent("", "scalar", msg2)
 	}
 	p := make(map[string]interface{})
 	p["tag"] = "test"
@@ -853,7 +856,7 @@ func TestGetEventAt(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -865,21 +868,21 @@ func TestGetEventAt(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	msg1 := "{\"message\":\"First event\"}"
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("test").SubmitEvent("", "test", msg1)
 	for n := 0; n < 50; n++ {
 		msg2 := "{\"Counter\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "test", msg2)
+		evStore.Committer("test").SubmitEvent("", "test", msg2)
 	}
 	tPoint := time.Now()
 	<-time.After(100 * time.Millisecond)
 	for n := 50; n < 100; n++ {
 		msg2 := "{\"Counter\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "test", msg2)
+		evStore.Committer("test").SubmitEvent("", "test", msg2)
 	}
 	msgLast := "{\"message\":\"Last event\"}"
-	evStore.Committer().SubmitEvent("", "test", msgLast)
+	evStore.Committer("test").SubmitEvent("", "test", msgLast)
 	p := make(map[string]interface{})
-	p["tag"] = ""
+	p["tag"] = "test"
 	p["at"] = tPoint
 	p["filter"] = nil
 	prms := NewRPCParameterInterface(p)
@@ -914,7 +917,7 @@ func TestGetEventAtByType(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -927,17 +930,17 @@ func TestGetEventAtByType(t *testing.T) {
 	}
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Counter\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "test", msg2)
-		evStore.Committer().SubmitEvent("", "fake", msg2)
+		evStore.Committer("test").SubmitEvent("", "test", msg2)
+		evStore.Committer("test").SubmitEvent("", "fake", msg2)
 	}
 	tPoint := time.Now()
 	<-time.After(100 * time.Millisecond)
 	msg1 := "{\"message\":\"Last event of type test\"}"
-	evStore.Committer().SubmitEvent("", "test", msg1)
+	evStore.Committer("test").SubmitEvent("", "test", msg1)
 	for n := 0; n < 100; n++ {
 		msg2 := "{\"Fake event\":" + strconv.Itoa(n) + "}"
-		evStore.Committer().SubmitEvent("", "scalar", msg2)
-		evStore.Committer().SubmitEvent("", "test", msg2)
+		evStore.Committer("test").SubmitEvent("", "scalar", msg2)
+		evStore.Committer("test").SubmitEvent("", "test", msg2)
 	}
 	p := make(map[string]interface{})
 	p["tag"] = "test"
@@ -976,7 +979,7 @@ func TestGetEventAtByFilter(t *testing.T) {
 	var (
 		m map[string]interface{}
 	)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -987,11 +990,11 @@ func TestGetEventAtByFilter(t *testing.T) {
 	if f == nil {
 		t.Fatal("Function is nil")
 	}
-	submitNScalars(evStore, 100, 1, 1, 0)
-	submitNScalars(evStore, 1, 2, 2, 0)
+	submitNScalars(evStore, "scalar", 100, 1, 1, 0)
+	submitNScalars(evStore, "scalar", 1, 2, 2, 0)
 	tPoint := time.Now()
 	<-time.After(100 * time.Millisecond)
-	submitNScalars(evStore, 100, 3, 23, 0)
+	submitNScalars(evStore, "scalar", 100, 3, 23, 0)
 	p := make(map[string]interface{})
 	p["tag"] = "scalar"
 	p["at"] = tPoint
@@ -1037,7 +1040,7 @@ func TestGetEventAtByFilter(t *testing.T) {
 }
 
 func TestListDatabases(t *testing.T) {
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1063,7 +1066,7 @@ func TestEcho(t *testing.T) {
 	p["int"] = 1
 	p["string"] = "This is string"
 	prms := NewRPCParameterInterface(p)
-	evStore, err := initEventStore("localhost", dbName, "test")
+	evStore, err := initEventStore("localhost", dbName)
 	if err != nil {
 		t.Fatal(err)
 	}
