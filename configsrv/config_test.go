@@ -21,7 +21,7 @@ const (
 	mongoURL string = "mongodb://127.0.0.1"
 )
 
-func Handler(ctx context.Context, msgs []interface{}) {
+func Handler(ctx context.Context, stream string, msgs []interface{}) {
 
 }
 func TestDropDatabase(t *testing.T) {
@@ -40,7 +40,7 @@ func TestCurrentScalarState(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 
-		err = ev.Listenner2("events").Subscribe2("", Handler)
+		err = ev.Listenner2().Subscribe2("events", "", "", Handler)
 		So(err, ShouldBeNil)
 		//	Loop:
 		fmt.Println("All messages read")

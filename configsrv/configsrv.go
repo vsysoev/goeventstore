@@ -38,7 +38,7 @@ var (
 	isCurrent     bool
 )
 
-func configHandler(ctx context.Context, msgs []interface{}) {
+func configHandler(ctx context.Context, stream string, msgs []interface{}) {
 	for _, v := range msgs {
 		switch v.(bson.M)["tag"] {
 		case "config":
@@ -131,7 +131,7 @@ func main() {
 	currentConfig.mx = &sync.Mutex{}
 	isCurrent = false
 	stateUpdateChannel := make(chan *bson.M, 256)
-	err = evStore.Listenner2(props["configsrv.stream"]).Subscribe2("config", configHandler)
+	err = evStore.Listenner2().Subscribe2(props["configsrv.stream"], "config", "", configHandler)
 	if err != nil {
 		log.Fatalln("Error subscribing for config changes", err)
 	}
@@ -139,7 +139,7 @@ func main() {
 	ctx := context.WithValue(ctx1, "stateUpdateChannel", stateUpdateChannel)
 	defer cancel()
 	log.Println("Before Listen call")
-	go evStore.Listenner2(props["configsrv.stream"]).Listen(ctx, id)
+	go evStore.Listenner2().Listen(ctx, id)
 
 	go processClientConnection(ctx, wsServer)
 	go wsServer.Listen()

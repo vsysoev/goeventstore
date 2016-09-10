@@ -19,7 +19,7 @@ const (
 	dbName   string = "eventsrv_test"
 )
 
-func handlerTest(ctx context.Context, events []interface{}) {
+func handlerTest(ctx context.Context, stream string, events []interface{}) {
 	for _, ev := range events {
 		log.Println(ev)
 		//		ctx.Value("id") = ev.(bson.M)["_id"].(bson.ObjectId).Hex()
@@ -31,12 +31,12 @@ func TestEventSrv(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 
-		err = ev.Listenner2("events").Subscribe2("", handlerTest)
+		err = ev.Listenner2().Subscribe2("events", "", "", handlerTest)
 		So(err, ShouldBeNil)
 		ctx := context.WithValue(context.Background(), "test", t)
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-		go ev.Listenner2("events").Listen(ctx, "")
+		go ev.Listenner2().Listen(ctx, "")
 		<-time.After(time.Second * 2)
 
 		fmt.Println("All messages read")

@@ -24,7 +24,7 @@ const (
 	timeout = time.Millisecond * 10
 )
 
-func messageHandler(ctx context.Context, msg []interface{}) {
+func messageHandler(ctx context.Context, stream string, msg []interface{}) {
 	log.Println("Msgs received")
 	toWS := ctx.Value("toWS").(chan *wsock.MessageT)
 
@@ -47,7 +47,7 @@ func clientHandler(ctx context.Context, c *wsock.Client, evStore evstore.Connect
 	stream := c.Request().FormValue("stream")
 	_, toWS, doneCh := c.GetChannels()
 	if tag != "" {
-		err = evStore.Listenner2(stream).Subscribe2(tag, messageHandler)
+		err = evStore.Listenner2().Subscribe2(stream, tag, "", messageHandler)
 		if err != nil {
 			log.Println("Can't subscribe to evStore", err)
 			return
@@ -55,7 +55,7 @@ func clientHandler(ctx context.Context, c *wsock.Client, evStore evstore.Connect
 		ctx2 := context.WithValue(ctx, "toWS", toWS)
 		ctx3, cancel := context.WithCancel(ctx2)
 		defer cancel()
-		go evStore.Listenner2(stream).Listen(ctx3, id)
+		go evStore.Listenner2().Listen(ctx3, id)
 	} else {
 		js := wsock.MessageT{}
 		js["response"] = "ERROR: No tag to subscribe"

@@ -7,6 +7,7 @@ package main
 //DONE:100 Updates of state should be passed through pub/sub
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -16,14 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/mgo.v2/bson"
-
-	"golang.org/x/net/context"
-
 	"github.com/docker/docker/pkg/pubsub"
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
 	"github.com/vsysoev/goeventstore/wsock"
+	"gopkg.in/mgo.v2/bson"
 )
 
 const (
@@ -157,6 +155,48 @@ func scalarHandler(ctx context.Context, msgs []interface{}) {
 		fmt.Print("+")
 	} else {
 		fmt.Print("-")
+	}
+}
+func systemUpdateHandler(ctx context.Context, stream string, msgs []interface{}) {
+	var (
+		boxID int
+		err   error
+	)
+	for _, v := range msgs {
+		switch v.(bson.M)["tag"] {
+		case "respondbox":
+			sState.mx.Lock()
+			switch bID := v.(bson.M)["event"].(bson.M)["box_id"].(type) {
+			case int:
+				boxID = int(bID)
+			case int32:
+				boxID = int(bID)
+			case int64:
+				boxID = int(bID)
+			case float32:
+				boxID = int(bID)
+			case float64:
+				boxID = int(bID)
+			case string:
+				boxID, err = strconv.Atoi(bID)
+				if err != nil {
+					log.Println("Error in boxID", bID)
+					return
+				}
+			default:
+				boxID = -1
+				log.Println("Error in boxID", bID)
+				return
+			}
+			if sState.state[boxID] == nil {
+				sState.state[boxID] = make(map[int]*bson.M)
+			}
+			evStore := ctx.Value("evStore").(evstore.Connection)
+			//			evStore.Listenner2("scalar_" + strconv.Itoa(boxID))
+			id := evStore.Listenner2().GetLastID("scalar_" + strconv.Itoa(boxID))
+			evStore.Listenner2().Subscribe2("scalar_"+strconv.Itoa(boxID), "scalar", id, systemUpdateHandler)
+			break
+		}
 	}
 }
 
@@ -295,7 +335,7 @@ func main() {
 	flag.Parse()
 	props := property.Init()
 
-	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"], props["mongodb.stream"])
+	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"])
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}
@@ -308,15 +348,16 @@ func main() {
 	sState.mx = &sync.Mutex{}
 	isCurrent = false
 	stateUpdate := pubsub.NewPublisher(time.Millisecond*100, 1024)
-	err = evStore.Listenner2().Subscribe2("scalar", scalarHandler)
+	err = evStore.Listenner2().Subscribe2("sysupdate", "respondbox", "", systemUpdateHandler)
 	if err != nil {
 		log.Fatalln("Error subscribing for changes", err)
 	}
 	ctx1, cancel := context.WithCancel(context.Background())
-	ctx := context.WithValue(ctx1, "stateUpdate", stateUpdate)
+	ctx2 := context.WithValue(ctx1, "stateUpdate", stateUpdate)
+	ctx := context.WithValue(ctx2, "eventStore", evStore)
 	defer cancel()
-	sState.lastID = evStore.Listenner2().GetLastID()
-	log.Println("Before Listen call")
+	sState.lastID = evStore.Listenner2().GetLastID("")
+
 	go evStore.Listenner2().Listen(ctx, id)
 
 	go processClientConnection(ctx, wsServer)

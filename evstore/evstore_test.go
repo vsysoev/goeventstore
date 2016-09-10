@@ -23,14 +23,18 @@ type (
 	PositiveListenner struct{}
 )
 
+var (
+	scalarCounter int = 0
+	vectorCounter int = 0
+)
+
 func dropTestDatabase(dbName string) error {
 	props := property.Init()
 	session, err := mgo.Dial(props["mongodb.url"])
 	if err != nil {
 		return err
 	}
-	_ = session.DB(dbName).C("events_capped").DropCollection()
-	_ = session.DB(dbName).C("events").DropCollection()
+	_ = session.DB(dbName).DropDatabase()
 	return nil
 }
 
@@ -46,24 +50,26 @@ func TestListen2Interface(t *testing.T) {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
-		err = ev.Listenner2("events").Subscribe2("scalar", sampleHandler)
+		err = ev.Listenner2().Subscribe2("events", "scalar", "", sampleHandler)
 		So(err, ShouldBeNil)
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*3)
-		go ev.Listenner2("events").Listen(ctx, "")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
+		go ev.Listenner2().Listen(ctx, "")
 		<-ctx.Done()
-		ev.Listenner2("events").Unsubscribe2("scalar")
+		ev.Listenner2().Unsubscribe2("events", "scalar")
 		ev.Close()
 	})
 	Convey("When do panic in handler should not panic", t, func() {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
-		err = ev.Listenner2("events").Subscribe2("scalar", panicHandler)
+		err = ev.Listenner2().Subscribe2("events", "scalar", "", panicHandler)
 		So(err, ShouldBeNil)
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*3)
-		go ev.Listenner2("events").Listen(ctx, "")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
+		go ev.Listenner2().Listen(ctx, "")
 		<-ctx.Done()
-		ev.Listenner2("events").Unsubscribe2("scalar")
+		ev.Listenner2().Unsubscribe2("events", "scalar")
 		ev.Close()
 	})
 	Convey("Check if LastId isn't empty string", t, func() {
@@ -73,10 +79,35 @@ func TestListen2Interface(t *testing.T) {
 		So(ev, ShouldNotBeNil)
 		ev.Committer("events").SubmitEvent("", "fake", "{\"event\":\"fake\"}")
 		So(err, ShouldBeNil)
-		id := ev.Listenner2("events").GetLastID()
+		id := ev.Listenner2().GetLastID("events")
 		So(id, ShouldNotEqual, "")
 		ev.Close()
 
+	})
+	Convey("Check if 100 message is written and notified", t, func() {
+		dropTestDatabase(dbName)
+		ev, err := Dial(mongoURL, dbName)
+		So(err, ShouldBeNil)
+		So(ev, ShouldNotBeNil)
+		err = ev.Listenner2().Subscribe2("scalars", "scalar", "", scalarHandler)
+		So(err, ShouldBeNil)
+		err = ev.Listenner2().Subscribe2("vectors", "vector", "", scalarHandler)
+		So(err, ShouldBeNil)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
+		scalarCounter = 100
+		vectorCounter = 100
+		go ev.Listenner2().Listen(ctx, "")
+		for i := 0; i < 100; i++ {
+			err = ev.Committer("scalars").SubmitEvent("", "scalar", "{\"value\":"+strconv.Itoa(i)+"}")
+			So(err, ShouldBeNil)
+			err = ev.Committer("vectors").SubmitEvent("", "vector", "{\"vector\":"+strconv.Itoa(i)+"}")
+			So(err, ShouldBeNil)
+		}
+		<-time.After(1 * time.Second)
+		So(scalarCounter, ShouldEqual, 0)
+		So(vectorCounter, ShouldEqual, 0)
+		ev.Close()
 	})
 }
 func TestQueryInterface(t *testing.T) {
@@ -216,13 +247,22 @@ func TestManagerInterface(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(len(collections), ShouldBeGreaterThan, 0)
 	})
-
 }
-func sampleHandler(ctx context.Context, events []interface{}) {
+
+func sampleHandler(ctx context.Context, stream string, events []interface{}) {
 	for _, event := range events {
 		log.Println(event)
 	}
 }
-func panicHandler(ctx context.Context, event []interface{}) {
+func panicHandler(ctx context.Context, stream string, event []interface{}) {
 	panic("panic Handler fired")
+}
+func scalarHandler(ctx context.Context, stream string, events []interface{}) {
+	log.Println(stream)
+	switch stream {
+	case "scalars":
+		scalarCounter = scalarCounter - len(events)
+	case "vectors":
+		vectorCounter = vectorCounter - len(events)
+	}
 }

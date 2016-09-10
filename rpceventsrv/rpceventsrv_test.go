@@ -37,7 +37,7 @@ func (f *fakeDB) Committer(stream string) evstore.Committer {
 func (f *fakeDB) Listenner(stream string) evstore.Listenner {
 	return &fakeListenner{}
 }
-func (f *fakeDB) Listenner2(stream string) evstore.Listenner2 {
+func (f *fakeDB) Listenner2() evstore.Listenner2 {
 	return &fakeListenner2{}
 }
 func (f *fakeDB) Manager() evstore.Manager {
@@ -66,13 +66,13 @@ func (f *fakeListenner) Unsubscribe(eventChannel chan string) {
 
 }
 
-func (f *fakeListenner2) Subscribe2(eventTypes string, handlerFunc evstore.Handler) error {
+func (f *fakeListenner2) Subscribe2(stream string, eventTypes string, id string, handlerFunc evstore.Handler) error {
 	return errors.New("Not implemented")
 }
-func (f *fakeListenner2) Unsubscribe2(eventTypes string) {
+func (f *fakeListenner2) Unsubscribe2(stream string, eventTypes string) {
 
 }
-func (f *fakeListenner2) GetLastID() string {
+func (f *fakeListenner2) GetLastID(stream string) string {
 	return "Not implemented"
 }
 func (f *fakeListenner2) Listen(ctx context.Context, id string) error {

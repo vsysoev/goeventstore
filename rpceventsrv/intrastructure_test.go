@@ -9,6 +9,7 @@ import (
 	"github.com/vsysoev/goeventstore/wsock"
 
 	"context"
+
 	"golang.org/x/net/websocket"
 )
 

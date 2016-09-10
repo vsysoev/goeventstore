@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
 	"strconv"
@@ -12,7 +11,7 @@ import (
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/docker/docker/pkg/pubsub"
 	. "github.com/smartystreets/goconvey/convey"
@@ -25,8 +24,23 @@ const (
 	dbName   string = "currentsrv_test"
 )
 
-func Handler(ctx context.Context, msgs []interface{}) {
+var (
+	msgNumber int
+)
 
+func Handler(ctx context.Context, stream string, msgs []interface{}) {
+	log.Println("Enter handler")
+	log.Println(msgs)
+	msgNumber = msgNumber - len(msgs)
+}
+
+func initEventStore(url string, dbName string) (evstore.Connection, error) {
+	ev, err := evstore.Dial(mongoURL, dbName)
+	if err != nil {
+		return nil, err
+	}
+	err = ev.Manager().DropDatabase(dbName)
+	return ev, err
 }
 func TestDropDatabase(t *testing.T) {
 	Convey("Before start testing we drop database", t, func() {
@@ -38,33 +52,54 @@ func TestDropDatabase(t *testing.T) {
 		_ = session.DB(dbName).C("events").DropCollection()
 	})
 }
+
+func respondBoxHandler(ctx context.Context, stream string, msgs []interface{}) {
+	msgNumber = msgNumber - len(msgs)
+}
+func TestRespondBoxState(t *testing.T) {
+	Convey("When i commit respondbox message", t, func() {
+		ev, err := initEventStore(mongoURL, dbName)
+		So(err, ShouldBeNil)
+		So(ev, ShouldNotBeNil)
+		ctx, cancel := context.WithCancel(context.Background())
+		err = ev.Listenner2().Subscribe2("systemupdate", "respondbox", "", respondBoxHandler)
+		defer cancel()
+		go ev.Listenner2().Listen(ctx, "")
+		So(err, ShouldBeNil)
+		msgNumber = 9
+		for i := 1; i < 10; i++ {
+			boxID := strconv.Itoa(i)
+			sendMsg := "{\"box_id\":" + boxID + "}"
+			err = ev.Committer("systemupdate").SubmitEvent("", "respondbox", sendMsg)
+			So(err, ShouldBeNil)
+		}
+		<-time.After(1 * time.Second)
+		So(msgNumber, ShouldEqual, 0)
+	})
+}
 func TestCurrentScalarState(t *testing.T) {
 	Convey("When commit current message to database", t, func() {
-		ev, err := evstore.Dial(mongoURL, dbName, "events")
+		ev, err := initEventStore(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 
-		err = ev.Listenner2().Subscribe2("", Handler)
+		err = ev.Listenner2().Subscribe2("scalar_1", "scalar", "", Handler)
 		So(err, ShouldBeNil)
-		//	Loop:
-		fmt.Println("All messages read")
+		sendMsg := "{\"box_id\":1}"
+		err = ev.Committer("systemupdate").SubmitEvent("", "respondbox", sendMsg)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go ev.Listenner2().Listen(ctx, "")
+		msgNumber = 9
 		for i := 1; i < 10; i++ {
-			timestamp := strconv.FormatInt(time.Now().UnixNano(), 10)
-			log.Println(timestamp)
-			rand.Seed(time.Now().UTC().UnixNano())
-			boxID := strconv.Itoa(rand.Intn(100))
 			varID := strconv.Itoa(rand.Intn(200))
-			boxID = "1"
-			if i > 4 {
-				varID = "3"
-			} else {
-				varID = "4"
-			}
 			val := strconv.FormatFloat(rand.NormFloat64(), 'f', 2, 64)
-			sendMsg := "{\"datestamp\":\"" + timestamp + "\", \"box_id\": " + boxID + ", \"var_id\": " + varID + ", \"value\": " + val + "}"
-			err = ev.Committer().SubmitEvent("123", "scalar", sendMsg)
+			sendMsg := "{\"var_id\":" + varID + ", \"value\": " + val + "}"
+			err = ev.Committer("scalar_1").SubmitEvent("123", "scalar", sendMsg)
 			So(err, ShouldBeNil)
 		}
+		<-time.After(1 * time.Second)
+		So(msgNumber, ShouldEqual, 0)
 		ev.Close()
 	})
 }

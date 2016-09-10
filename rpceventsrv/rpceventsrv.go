@@ -29,9 +29,11 @@ type (
 	RPCFunction struct {
 		evStore evstore.Connection
 	}
+	// RPCParameter holds params for PRC call for unification
 	RPCParameter struct {
 		params map[string]interface{}
 	}
+	// RPCParameterInterface interface to pass parameter to function
 	RPCParameterInterface interface {
 		AsString(string) (string, error)
 		AsInt64(string) (int64, error)
@@ -39,14 +41,17 @@ type (
 		Serialize() (string, error)
 		AsMapString(string) (map[string]interface{}, error)
 	}
+	// RPCFunctionInterface declare interface to get function to RPC call
 	RPCFunctionInterface interface {
 		GetFunction(funcName string) (interface{}, error)
 	}
+	// MessageStruct holds message passed through websocket
 	MessageStruct struct {
 		Timestamp time.Time   `json:"timestamp"`
 		Tag       string      `json:"tag"`
 		Event     interface{} `json:"event"`
 	}
+	// OnePoint holds info for GetDistanceValue
 	OnePoint struct {
 		Timestamp      time.Time `json:"timestamp"`
 		NumberOfPoints int       `json:"numofpoints"`

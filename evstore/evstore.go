@@ -38,10 +38,11 @@ type (
 	// ListennerT export Listenner interface
 	ListennerT struct {
 		c             *ConnectionT
-		filter        map[string]Handler
+		filters       []filterStruct
 		stream        string
 		triggerStream string
 		done          chan bool
+		ctx           *context.Context
 		wg            *sync.WaitGroup
 	}
 	// ManageT struct for Manage interface
@@ -52,6 +53,12 @@ type (
 	// QueryT struct for Query interface
 	QueryT struct {
 		c *ConnectionT
+	}
+	filterStruct struct {
+		handler Handler
+		stream  string
+		tag     string
+		id      string
 	}
 
 	// Committer interface defines method to commit new event to eventstore
@@ -67,13 +74,13 @@ type (
 	}
 
 	// Handler type defines function which will be used as callback
-	Handler func(ctx context.Context, event []interface{})
+	Handler func(ctx context.Context, stream string, event []interface{})
 	// Listenner2 interface is replacement of Listenner
 	// TODO:10 Remove Listenner interface and rename Listenner2 to Listenner
 	Listenner2 interface {
-		Subscribe2(eventTypes string, handlerFunc Handler) error
-		Unsubscribe2(eventTypes string)
-		GetLastID() string
+		Subscribe2(stream string, eventTypes string, id string, handlerFunc Handler) error
+		Unsubscribe2(stream string, eventTypes string)
+		GetLastID(stream string) string
 		Listen(ctx context.Context, id string) error
 	}
 	// Manager interface to support internal database functions
@@ -96,7 +103,7 @@ type (
 	Connection interface {
 		Committer(stream string) Committer
 		Listenner(stream string) Listenner
-		Listenner2(stream string) Listenner2
+		Listenner2() Listenner2
 		Manager() Manager
 		Query(stream string) Query
 		Close()
@@ -311,37 +318,33 @@ func (e *ListennerT) Unsubscribe(eventChannel chan string) {
 }
 
 // Listenner2 - new implementation of listenner function. Will replace Listenner
-func (c *ConnectionT) Listenner2(stream string) Listenner2 {
+func (c *ConnectionT) Listenner2() Listenner2 {
 	c.l.wg = &sync.WaitGroup{}
-	c.stream = stream
-	c.triggerStream = stream + triggerSuffix
 	return c.l
 }
 
 // Subscribe2 - new implementation of Subscribe fucntion. Will replace Subscribe
-func (e *ListennerT) Subscribe2(eventType string, handlerFunc Handler) error {
-	if eventType != "" {
-		if len(e.filter) == 0 {
-			e.filter = make(map[string]Handler)
-		}
-		e.filter[eventType] = handlerFunc
-	} else {
-		e.filter = nil
-		e.filter = make(map[string]Handler)
-		e.filter[""] = handlerFunc
+func (e *ListennerT) Subscribe2(stream string, eventType string, id string, handlerFunc Handler) error {
+	if len(e.filters) == 0 {
+		e.filters = make([]filterStruct, 0)
+	}
+	filter := filterStruct{stream: stream, tag: eventType, handler: handlerFunc, id: id}
+	e.filters = append(e.filters, filter)
+	if e.ctx != nil {
+		go e.processSubscription(*e.ctx, stream, eventType, id, handlerFunc)
 	}
 	return nil
 }
 
 // Unsubscribe2 - new implementation of Unsubscribe function.
-func (e *ListennerT) Unsubscribe2(eventType string) {
+func (e *ListennerT) Unsubscribe2(stream string, eventType string) {
 	return
 }
 
 // GetLastID - returns last event id
-func (e *ListennerT) GetLastID() string {
+func (e *ListennerT) GetLastID(stream string) string {
 	var result map[string]interface{}
-	iter := e.c.session.DB(e.c.dbName).C(e.c.stream).Find(nil).Sort("-$natural").Limit(1).Iter()
+	iter := e.c.session.DB(e.c.dbName).C(stream).Find(nil).Sort("-$natural").Limit(1).Iter()
 	if iter == nil {
 		return ""
 	}
@@ -354,16 +357,17 @@ func (e *ListennerT) GetLastID() string {
 
 // Listen start go routines which listen event in event stream and execute Handler
 func (e *ListennerT) Listen(ctx context.Context, id string) error {
+	e.ctx = &ctx
 	if e.c.session == nil {
 		return errors.New("Mongo isn't connected. Please use Dial().")
 	}
-	for filter, handler := range e.filter {
-		go e.processSubscription(ctx, filter, id, handler)
+	for _, filter := range e.filters {
+		go e.processSubscription(ctx, filter.stream, filter.tag, filter.id, filter.handler)
 	}
 	<-ctx.Done()
 	return nil
 }
-func (c *ConnectionT) readEventsLimit(filter string, fromID string, limit int) ([]interface{}, error) {
+func (c *ConnectionT) readEventsLimit(stream string, filter string, fromID string, limit int) ([]interface{}, error) {
 	var (
 		err    error
 		result []interface{}
@@ -383,24 +387,24 @@ func (c *ConnectionT) readEventsLimit(filter string, fromID string, limit int) (
 		objID := bson.ObjectIdHex(fromID)
 		q["_id"] = bson.M{"$gt": objID}
 	}
-	err = sessionCopy.DB(c.dbName).C(c.stream).Find(q).Limit(limit).All(&result)
+	err = sessionCopy.DB(c.dbName).C(stream).Find(q).Limit(limit).All(&result)
 	return result, err
 }
 
-func (e *ListennerT) processSubscription(ctx context.Context, filter string, id string, handler Handler) {
+func (e *ListennerT) processSubscription(ctx context.Context, stream, filter string, id string, handler Handler) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Handler function panic detected. Recovering", r)
 		}
 	}()
 	for {
-		result, err := e.c.readEventsLimit(filter, id, 1000)
+		result, err := e.c.readEventsLimit(stream, filter, id, 1000)
 		if err != nil {
 			log.Println(err)
 			return
 		}
 		if len(result) > 0 {
-			handler(ctx, result)
+			handler(ctx, stream, result)
 			id = result[len(result)-1].(bson.M)["_id"].(bson.ObjectId).Hex()
 		}
 		select {
