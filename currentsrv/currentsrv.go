@@ -365,5 +365,8 @@ func main() {
 
 	//http.Handle(props["static.url"], http.FileServer(http.Dir("webroot")))
 	err = http.ListenAndServe(props["current.url"], nil)
+	if err != nil {
+		log.Fatalln("Error ListenAndServe", err)
+	}
 	evStore.Close()
 }

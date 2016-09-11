@@ -87,6 +87,7 @@ func TestCurrentScalarState(t *testing.T) {
 		So(err, ShouldBeNil)
 		sendMsg := "{\"box_id\":1}"
 		err = ev.Committer("systemupdate").SubmitEvent("", "respondbox", sendMsg)
+		So(err, ShouldBeNil)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go ev.Listenner2().Listen(ctx, "")
