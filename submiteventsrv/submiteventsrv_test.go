@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"context"
+
 	"golang.org/x/net/websocket"
 
 	"gopkg.in/mgo.v2"
@@ -27,7 +28,7 @@ type (
 	}
 )
 
-func makeStubClient() Connector {
+func makeStubClient() wsock.ClientInterface {
 	s := stubClient{}
 	s.fromWS = make(chan *wsock.MessageT, 128)
 	s.toWS = make(chan *wsock.MessageT, 128)
@@ -49,6 +50,9 @@ func (ws *stubClient) Write(msg *wsock.MessageT) {
 
 }
 func (ws *stubClient) Done() {
+
+}
+func (ws *stubClient) Listen() {
 
 }
 
@@ -76,7 +80,7 @@ func TestSubmitEvent(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		fromWS, _, _ := c.GetChannels()
-		go handleClientRequest(ctx, c, ev)
+		go handleClientRequest(ctx, &c, ev)
 		m := wsock.MessageT{}
 		m["sequenceid"] = ""
 		m["tag"] = "test"
@@ -111,7 +115,7 @@ func TestSubmitErrorEvent(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		fromWS, toWS, _ := c.GetChannels()
-		go handleClientRequest(ctx, c, ev)
+		go handleClientRequest(ctx, &c, ev)
 		m := wsock.MessageT{}
 		m["sequenceid"] = ""
 		m["event"] = map[string]interface{}{"event": "no tag"}
@@ -143,7 +147,7 @@ func TestSubmitErrorEvent(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		fromWS, toWS, _ := c.GetChannels()
-		go handleClientRequest(ctx, c, ev)
+		go handleClientRequest(ctx, &c, ev)
 		m := wsock.MessageT{}
 		m["sequenceid"] = ""
 		m["tag"] = "test"

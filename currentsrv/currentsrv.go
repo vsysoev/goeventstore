@@ -44,7 +44,7 @@ type (
 	}
 	// ClientWithFilter stores pointer to client and params
 	ClientWithFilter struct {
-		client        *wsock.Client
+		client        *wsock.ClientInterface
 		filter        map[int]bool
 		updateChannel chan interface{}
 	}
@@ -94,7 +94,7 @@ func (s ScalarState) serialize2Slice(id string) ([]*bson.M, string, error) {
 	return list, mID, nil
 }
 
-func scalarHandler(ctx context.Context, msgs []interface{}) {
+func scalarHandler(ctx context.Context, stream string, msgs []interface{}) {
 	var (
 		boxID, varID int
 	)
@@ -165,7 +165,6 @@ func systemUpdateHandler(ctx context.Context, stream string, msgs []interface{})
 	for _, v := range msgs {
 		switch v.(bson.M)["tag"] {
 		case "respondbox":
-			sState.mx.Lock()
 			switch bID := v.(bson.M)["event"].(bson.M)["box_id"].(type) {
 			case int:
 				boxID = int(bID)
@@ -188,13 +187,14 @@ func systemUpdateHandler(ctx context.Context, stream string, msgs []interface{})
 				log.Println("Error in boxID", bID)
 				return
 			}
-			if sState.state[boxID] == nil {
-				sState.state[boxID] = make(map[int]*bson.M)
+			if evStore, ok := ctx.Value("evStore").(evstore.Connection); ok {
+				//			evStore.Listenner2("scalar_" + strconv.Itoa(boxID))
+				id := evStore.Listenner2().GetLastID("scalar_" + strconv.Itoa(boxID))
+				evStore.Listenner2().Subscribe2("scalar_"+strconv.Itoa(boxID), "scalar", id, scalarHandler)
+			} else {
+				log.Println("EventStore not defined")
+				return
 			}
-			evStore := ctx.Value("evStore").(evstore.Connection)
-			//			evStore.Listenner2("scalar_" + strconv.Itoa(boxID))
-			id := evStore.Listenner2().GetLastID("scalar_" + strconv.Itoa(boxID))
-			evStore.Listenner2().Subscribe2("scalar_"+strconv.Itoa(boxID), "scalar", id, systemUpdateHandler)
 			break
 		}
 	}
@@ -204,10 +204,10 @@ func handleClient(ctx context.Context) {
 	var (
 		c ClientWithFilter
 	)
-	c.client = ctx.Value("client").(*wsock.Client)
+	c.client = ctx.Value("client").(*wsock.ClientInterface)
 	c.filter = make(map[int]bool, 0)
 	c.updateChannel = ctx.Value("stateUpdate").(*pubsub.Publisher).Subscribe()
-	fromWS, toWS, doneCh := c.client.GetChannels()
+	fromWS, toWS, doneCh := (*c.client).GetChannels()
 Loop:
 	for {
 		select {
@@ -284,15 +284,19 @@ Loop:
 			break Loop
 		}
 	}
+	log.Println("Exit handleClient")
 }
 
-func processClientConnection(ctx context.Context, s *wsock.Server) {
+func processClientConnection(ctx context.Context, s wsock.ServerInterface) {
 	var (
 		clients ClientSlice
 	)
-	addCh, delCh, doneCh, _ := s.GetChannels()
+	addCh, delCh, doneCh, errCh := s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)
-
+	if addCh == nil || delCh == nil || doneCh == nil || errCh == nil {
+		log.Println("No channels get from Server")
+		return
+	}
 Loop:
 	for {
 		select {
@@ -316,6 +320,9 @@ Loop:
 				}
 			}
 			break
+		case err := <-errCh:
+			log.Println(err)
+			break Loop
 			/*		case msg := <-ctx.Value("stateUpdateChannel").(chan *bson.M):
 					out := wsock.MessageT{}
 					out["state"] = msg

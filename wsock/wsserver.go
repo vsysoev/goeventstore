@@ -11,9 +11,9 @@ import (
 type (
 	Server struct {
 		pattern string
-		clients map[int]*Client
-		addCh   chan *Client
-		delCh   chan *Client
+		clients map[int]*ClientInterface
+		addCh   chan *ClientInterface
+		delCh   chan *ClientInterface
 		doneCh  chan bool
 		errCh   chan error
 	}
@@ -21,13 +21,32 @@ type (
 	Handler interface {
 		ClientHandler()
 	}
+	// ServerInterface defines Server function to support mocking for testing
+	ServerInterface interface {
+		Add(c ClientInterface)
+		// Del remove client when it disconnected
+		Del(c ClientInterface)
+
+		// Done indicates that server is stopping now
+		Done()
+
+		// Err indicates that server in error state
+		Err(err error)
+
+		// GetChannels return server channel to catch client connection and client
+		// information from outside
+		GetChannels() (chan *ClientInterface, chan *ClientInterface, chan bool, chan error)
+
+		// Listen  implements main server function
+		Listen()
+	}
 )
 
 // NewServer is the server factory
-func NewServer(pattern string) *Server {
-	clients := make(map[int]*Client)
-	addCh := make(chan *Client)
-	delCh := make(chan *Client)
+func NewServer(pattern string) ServerInterface {
+	clients := make(map[int]*ClientInterface)
+	addCh := make(chan *ClientInterface)
+	delCh := make(chan *ClientInterface)
 	doneCh := make(chan bool)
 	errCh := make(chan error)
 	return &Server{
@@ -40,14 +59,14 @@ func NewServer(pattern string) *Server {
 }
 
 // Add adds new client to server
-func (s *Server) Add(c *Client) {
-	s.addCh <- c
+func (s *Server) Add(c ClientInterface) {
+	s.addCh <- &c
 	log.Println("Sent client to ADD channel", s.addCh, c)
 }
 
 // Del remove client when it disconnected
-func (s *Server) Del(c *Client) {
-	s.delCh <- c
+func (s *Server) Del(c ClientInterface) {
+	s.delCh <- &c
 }
 
 // Done indicates that server is stopping now
@@ -62,7 +81,7 @@ func (s *Server) Err(err error) {
 
 // GetChannels return server channel to catch client connection and client
 // information from outside
-func (s *Server) GetChannels() (chan *Client, chan *Client, chan bool, chan error) {
+func (s *Server) GetChannels() (chan *ClientInterface, chan *ClientInterface, chan bool, chan error) {
 	return s.addCh, s.delCh, s.doneCh, s.errCh
 }
 

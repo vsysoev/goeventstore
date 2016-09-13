@@ -21,13 +21,9 @@ import (
 //TODO:0 Implement ONLY HTTPS post of events
 //DOING:0 Implements baseauth authorization
 
-type (
-	Connector wsock.Connector
-)
-
-func handleClientRequest(ctx context.Context, c Connector, e evstore.Connection) {
+func handleClientRequest(ctx context.Context, c *wsock.ClientInterface, e evstore.Connection) {
 	var ev map[string]interface{}
-	fromWS, toWS, doneCh := c.GetChannels()
+	fromWS, toWS, doneCh := (*c).GetChannels()
 Loop:
 	for {
 		select {
@@ -68,7 +64,7 @@ Loop:
 	}
 }
 
-func processClientConnection(s *wsock.Server, props property.PropSet) {
+func processClientConnection(s wsock.ServerInterface, props property.PropSet) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	log.Println("Enter processClientConnection")
@@ -84,8 +80,8 @@ Loop:
 			log.Println("Context destroyed")
 			break Loop
 		case cli := <-addCh:
-			log.Println("processClientConnection got add client notification", cli.Request().FormValue("id"))
-			streamName := cli.Conn().Request().FormValue("stream")
+			log.Println("processClientConnection got add client notification", (*cli).Request().FormValue("id"))
+			streamName := (*cli).Conn().Request().FormValue("stream")
 			if streamName == "" {
 				streamName = props["mongodb.stream"]
 			}

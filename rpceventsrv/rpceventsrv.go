@@ -402,7 +402,7 @@ func (f *RPCFunction) Echo(params RPCParameterInterface) (interface{}, error) {
 	return ch, nil
 }
 
-func clientHandler(ctx context.Context, c wsock.Connector, f *RPCFunction) {
+func clientHandler(ctx context.Context, c wsock.ClientInterface, f *RPCFunction) {
 	var (
 	//	err error
 	)
@@ -518,7 +518,7 @@ Loop:
 	return
 }
 
-func processClientConnection(s *wsock.Server, f *RPCFunction) {
+func processClientConnection(s wsock.ServerInterface, f *RPCFunction) {
 	log.Println("Enter processClientConnection")
 	addCh, delCh, doneCh, _ := s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)
@@ -526,10 +526,10 @@ Loop:
 	for {
 		select {
 		case cli := <-addCh:
-			log.Println("processClientConnection got add client notification", cli.Request().FormValue("id"))
+			log.Println("processClientConnection got add client notification", (*cli).Request().FormValue("id"))
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			go clientHandler(ctx, cli, f)
+			go clientHandler(ctx, (*cli), f)
 			break
 		case cli := <-delCh:
 			log.Println("delCh go client", cli)
@@ -559,5 +559,8 @@ func main() {
 
 	//http.Handle(props["static.url"], http.FileServer(http.Dir("webroot")))
 	err = http.ListenAndServe(props["rpceventsrv.url"], nil)
+	if err != nil {
+		log.Fatalln("Error ListenAndServe", err)
+	}
 	evStore.Close()
 }

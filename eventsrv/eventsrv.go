@@ -36,16 +36,16 @@ func messageHandler(ctx context.Context, stream string, msg []interface{}) {
 	log.Println("Msg sent")
 }
 
-func clientHandler(ctx context.Context, c *wsock.Client, evStore evstore.Connection) {
+func clientHandler(ctx context.Context, c *wsock.ClientInterface, evStore evstore.Connection) {
 	var (
 		err error
 	)
 	//	state := make(ScalarState)
-	log.Println("clientProcessor Client connected. ", c.Request())
-	id := c.Request().FormValue("id")
-	tag := c.Request().FormValue("tag")
-	stream := c.Request().FormValue("stream")
-	_, toWS, doneCh := c.GetChannels()
+	log.Println("clientProcessor Client connected. ", (*c).Request())
+	id := (*c).Request().FormValue("id")
+	tag := (*c).Request().FormValue("tag")
+	stream := (*c).Request().FormValue("stream")
+	_, toWS, doneCh := (*c).GetChannels()
 	if tag != "" {
 		err = evStore.Listenner2().Subscribe2(stream, tag, "", messageHandler)
 		if err != nil {
@@ -74,7 +74,7 @@ Loop:
 	log.Println("Exit clientProcessor")
 }
 
-func processClientConnection(s *wsock.Server, evStore evstore.Connection) {
+func processClientConnection(s wsock.ServerInterface, evStore evstore.Connection) {
 	log.Println("Enter processClientConnection")
 	addCh, delCh, doneCh, _ := s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)
@@ -82,7 +82,7 @@ Loop:
 	for {
 		select {
 		case cli := <-addCh:
-			log.Println("processClientConnection got add client notification", cli.Request().FormValue("id"))
+			log.Println("processClientConnection got add client notification", (*cli).Request().FormValue("id"))
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			go clientHandler(ctx, cli, evStore)

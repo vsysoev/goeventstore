@@ -21,7 +21,7 @@ type (
 	}
 )
 
-func NewFakeClient() wsock.Connector {
+func NewFakeClient() wsock.ClientInterface {
 	toWS := make(chan *wsock.MessageT, 1)
 	fromWS := make(chan *wsock.MessageT, 1)
 	done := make(chan bool, 1)
@@ -41,6 +41,9 @@ func (f *fakeClient) Conn() *websocket.Conn {
 func (f *fakeClient) Write(msg *wsock.MessageT) {
 }
 func (f *fakeClient) Done() {
+
+}
+func (f *fakeClient) Listen() {
 
 }
 

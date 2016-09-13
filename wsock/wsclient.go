@@ -27,18 +27,19 @@ type (
 		toWS   chan *MessageT
 		doneCh chan bool
 	}
-	// Connector interface defines communication interface
-	Connector interface {
+	// ClientInterface interface defines communication interface
+	ClientInterface interface {
 		GetChannels() (chan *MessageT, chan *MessageT, chan bool)
 		Request() *http.Request
 		Conn() *websocket.Conn
 		Write(msg *MessageT)
 		Done()
+		Listen()
 	}
 )
 
 // NewClient creates new websocket client.
-func NewClient(ws *websocket.Conn, server *Server) *Client {
+func NewClient(ws *websocket.Conn, server *Server) ClientInterface {
 
 	if ws == nil {
 		panic("Error ws can't be nil")
@@ -60,11 +61,6 @@ func NewClient(ws *websocket.Conn, server *Server) *Client {
 func (c *Client) GetChannels() (chan *MessageT, chan *MessageT, chan bool) {
 	log.Println("In GetChannels")
 	return c.fromWS, c.toWS, c.doneCh
-}
-
-// Connector returns pointer to connector interface
-func (c *Client) Connector() Connector {
-	return c
 }
 
 // Request returns HTTP request with parameters

@@ -23,7 +23,7 @@ const (
 
 type (
 	// ClientSlice define type for store clients connected
-	ClientSlice []*wsock.Client
+	ClientSlice []*wsock.ClientInterface
 	// Config struct stores current system configuration
 	Config struct {
 		config interface{}
@@ -67,7 +67,7 @@ func configHandler(ctx context.Context, stream string, msgs []interface{}) {
 	}
 }
 
-func processClientConnection(ctx context.Context, s *wsock.Server) {
+func processClientConnection(ctx context.Context, s wsock.ServerInterface) {
 	var clients ClientSlice
 	addCh, delCh, doneCh, _ := s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)
@@ -85,7 +85,7 @@ Loop:
 			log.Println("processClientConnection got add client notification", cli)
 			//			go clientProcessor(cli)
 			clients = append(clients, cli)
-			_, toWS, _ := cli.GetChannels()
+			_, toWS, _ := (*cli).GetChannels()
 			if isCurrent {
 				c := wsock.MessageT{}
 				c["msg"] = currentConfig.config
@@ -105,7 +105,7 @@ Loop:
 			out := wsock.MessageT{}
 			out["state"] = msg
 			for _, v := range clients {
-				_, toWS, _ := v.GetChannels()
+				_, toWS, _ := (*v).GetChannels()
 				toWS <- &out
 			}
 		}
