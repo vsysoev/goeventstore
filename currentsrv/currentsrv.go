@@ -138,6 +138,7 @@ func scalarHandler(ctx context.Context, stream string, msgs []interface{}) {
 				sState.state[boxID] = make(map[int]*bson.M)
 			}
 			vV := v.(bson.M)
+			log.Println(vV)
 			sState.state[boxID][varID] = &vV
 			sState.mx.Unlock()
 			if !isCurrent {
@@ -187,7 +188,9 @@ func systemUpdateHandler(ctx context.Context, stream string, msgs []interface{})
 				log.Println("Error in boxID", bID)
 				return
 			}
-			if evStore, ok := ctx.Value("evStore").(evstore.Connection); ok {
+			log.Println(v)
+			log.Println(ctx)
+			if evStore, ok := ctx.Value("eventStore").(evstore.Connection); ok {
 				//			evStore.Listenner2("scalar_" + strconv.Itoa(boxID))
 				id := evStore.Listenner2().GetLastID("scalar_" + strconv.Itoa(boxID))
 				evStore.Listenner2().Subscribe2("scalar_"+strconv.Itoa(boxID), "scalar", id, scalarHandler)
@@ -363,8 +366,8 @@ func main() {
 	ctx2 := context.WithValue(ctx1, "stateUpdate", stateUpdate)
 	ctx := context.WithValue(ctx2, "eventStore", evStore)
 	defer cancel()
-	sState.lastID = evStore.Listenner2().GetLastID("")
-
+	sState.lastID = evStore.Listenner2().GetLastID("sysupdate")
+	log.Println("sState", sState.lastID)
 	go evStore.Listenner2().Listen(ctx, id)
 
 	go processClientConnection(ctx, wsServer)

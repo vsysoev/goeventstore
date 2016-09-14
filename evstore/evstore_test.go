@@ -84,6 +84,24 @@ func TestListen2Interface(t *testing.T) {
 		ev.Close()
 
 	})
+	Convey("Check if Allready subscribed error returned in case of double subscribtion", t, func() {
+		dropTestDatabase(dbName)
+		ev, err := Dial(mongoURL, dbName)
+		So(err, ShouldBeNil)
+		So(ev, ShouldNotBeNil)
+		err = ev.Listenner2().Subscribe2("scalars", "scalar", "", scalarHandler)
+		So(err, ShouldBeNil)
+		err = ev.Listenner2().Subscribe2("scalars", "vector", "", scalarHandler)
+		So(err, ShouldBeNil)
+		err = ev.Listenner2().Subscribe2("vectors", "scalar", "", scalarHandler)
+		So(err, ShouldBeNil)
+		err = ev.Listenner2().Subscribe2("scalars", "scalars", "", scalarHandler)
+		So(err, ShouldBeNil)
+		err = ev.Listenner2().Subscribe2("scalars", "scalar", "", scalarHandler)
+		So(err.Error(), ShouldEqual, "Allready subscribed")
+		ev.Close()
+
+	})
 	Convey("Check if 100 message is written and notified", t, func() {
 		dropTestDatabase(dbName)
 		ev, err := Dial(mongoURL, dbName)

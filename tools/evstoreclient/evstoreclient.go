@@ -21,6 +21,14 @@ import (
 	"github.com/vsysoev/goeventstore/evstore"
 )
 
+type (
+	Message struct {
+		stream  string
+		tag     string
+		payload string
+	}
+)
+
 func send2EventStore(r *bufio.Reader, evStore evstore.Connection, stream string) {
 	for {
 		s, _, err := r.ReadLine()
@@ -69,7 +77,7 @@ func genValue(mode map[string]interface{}) (float64, map[string]interface{}) {
 	}
 	return 0.0, nil
 }
-func genData(ctx context.Context, modeString string, chanOutput chan string) {
+func genData(ctx context.Context, modeString string, chanOutput chan Message, stream string) {
 	var (
 		mode  map[string]interface{}
 		value float64
@@ -80,6 +88,11 @@ func genData(ctx context.Context, modeString string, chanOutput chan string) {
 	}
 	log.Println(mode)
 	m := mode["mode"].(map[string]interface{})
+	rspbox := Message{}
+	rspbox.stream = "sysupdate"
+	rspbox.tag = "respondbox"
+	rspbox.payload = "{\"box_id\":" + strconv.FormatInt(int64(mode["box_id"].(float64)), 10) + "}"
+	chanOutput <- rspbox
 Loop:
 	for {
 		select {
@@ -87,16 +100,18 @@ Loop:
 			break Loop
 		case <-time.After(time.Duration(mode["delay"].(float64)) * time.Millisecond):
 			value, m = genValue(m)
-			event := "{ \"box_id\":" + strconv.FormatInt(int64(mode["box_id"].(float64)), 10)
-			event = event + ", \"var_id\":" + strconv.FormatInt(int64(mode["var_id"].(float64)), 10)
-			event = event + ", \"value\":" + strconv.FormatFloat(value, 'f', 5, 32) + "}"
-			chanOutput <- event
+			msg := Message{}
+			msg.stream = stream + "_" + strconv.FormatInt(int64(mode["box_id"].(float64)), 10)
+			msg.tag = "scalar"
+			msg.payload = "{\"var_id\":" + strconv.FormatInt(int64(mode["var_id"].(float64)), 10)
+			msg.payload = msg.payload + ", \"value\":" + strconv.FormatFloat(value, 'f', 5, 32) + "}"
+			chanOutput <- msg
 			break
 		}
 	}
 }
 func genDataFromGenFile(ctx context.Context, genFile *bufio.Reader, evStore evstore.Connection, stream string) {
-	chanInput := make(chan string, 1)
+	chanInput := make(chan Message, 1)
 	for {
 		s, _, err := genFile.ReadLine()
 		if err == io.EOF {
@@ -106,7 +121,7 @@ func genDataFromGenFile(ctx context.Context, genFile *bufio.Reader, evStore evst
 		if err != nil {
 			log.Panicln(err)
 		}
-		go genData(ctx, string(s), chanInput)
+		go genData(ctx, string(s), chanInput, stream)
 	}
 	log.Println("Waiting for Ctrl-C")
 Loop:
@@ -116,7 +131,10 @@ Loop:
 			break Loop
 		case msg := <-chanInput:
 			log.Println(msg)
-			evStore.Committer(stream).SubmitEvent("", "scalar", msg)
+			err := evStore.Committer(msg.stream).SubmitEvent("", msg.tag, msg.payload)
+			if err != nil {
+				log.Println(err)
+			}
 		}
 	}
 }
