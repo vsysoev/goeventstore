@@ -330,7 +330,7 @@ func (e *ListennerT) Subscribe2(stream string, eventType string, id string, hand
 	}
 	for _, f := range e.filters {
 		if f.stream == stream && f.tag == eventType {
-			return errors.New("Allready subscribed")
+			return errors.New("Already subscribed")
 		}
 	}
 	filter := filterStruct{stream: stream, tag: eventType, handler: handlerFunc, id: id}

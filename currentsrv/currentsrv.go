@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,25 +98,20 @@ func (s ScalarState) serialize2Slice(id string) ([]*bson.M, string, error) {
 func scalarHandler(ctx context.Context, stream string, msgs []interface{}) {
 	var (
 		boxID, varID int
+		err          error
 	)
 	for _, v := range msgs {
 		switch v.(bson.M)["tag"] {
 		case "scalar":
 			sState.mx.Lock()
-			switch bID := v.(bson.M)["event"].(bson.M)["box_id"].(type) {
-			case int:
-				boxID = int(bID)
-			case int32:
-				boxID = int(bID)
-			case int64:
-				boxID = int(bID)
-			case float32:
-				boxID = int(bID)
-			case float64:
-				boxID = int(bID)
-			default:
-				boxID = -1
-				log.Println("Error in boxID", bID)
+			splits := strings.Split(stream, "_")
+			if len(splits) != 2 {
+				log.Println("Error in scalar stream name", stream)
+				return
+			}
+			boxID, err = strconv.Atoi(splits[1])
+			if err != nil {
+				log.Println(err)
 				return
 			}
 			switch vID := v.(bson.M)["event"].(bson.M)["var_id"].(type) {
@@ -138,7 +134,7 @@ func scalarHandler(ctx context.Context, stream string, msgs []interface{}) {
 				sState.state[boxID] = make(map[int]*bson.M)
 			}
 			vV := v.(bson.M)
-			log.Println(vV)
+			vV["event"].(bson.M)["box_id"] = boxID
 			sState.state[boxID][varID] = &vV
 			sState.mx.Unlock()
 			if !isCurrent {
@@ -164,6 +160,7 @@ func systemUpdateHandler(ctx context.Context, stream string, msgs []interface{})
 		err   error
 	)
 	for _, v := range msgs {
+		log.Println(v)
 		switch v.(bson.M)["tag"] {
 		case "respondbox":
 			switch bID := v.(bson.M)["event"].(bson.M)["box_id"].(type) {
@@ -180,7 +177,7 @@ func systemUpdateHandler(ctx context.Context, stream string, msgs []interface{})
 			case string:
 				boxID, err = strconv.Atoi(bID)
 				if err != nil {
-					log.Println("Error in boxID", bID)
+					log.Println("Error in boxID", bID, err)
 					return
 				}
 			default:
@@ -193,7 +190,13 @@ func systemUpdateHandler(ctx context.Context, stream string, msgs []interface{})
 			if evStore, ok := ctx.Value("eventStore").(evstore.Connection); ok {
 				//			evStore.Listenner2("scalar_" + strconv.Itoa(boxID))
 				id := evStore.Listenner2().GetLastID("scalar_" + strconv.Itoa(boxID))
-				evStore.Listenner2().Subscribe2("scalar_"+strconv.Itoa(boxID), "scalar", id, scalarHandler)
+				err = evStore.Listenner2().Subscribe2("scalar_"+strconv.Itoa(boxID), "scalar", id, scalarHandler)
+				if err != nil {
+					if err.Error() != "Already subscribed" {
+						log.Println(err)
+						return
+					}
+				}
 			} else {
 				log.Println("EventStore not defined")
 				return

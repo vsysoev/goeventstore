@@ -98,7 +98,7 @@ func TestListen2Interface(t *testing.T) {
 		err = ev.Listenner2().Subscribe2("scalars", "scalars", "", scalarHandler)
 		So(err, ShouldBeNil)
 		err = ev.Listenner2().Subscribe2("scalars", "scalar", "", scalarHandler)
-		So(err.Error(), ShouldEqual, "Allready subscribed")
+		So(err.Error(), ShouldEqual, "Already subscribed")
 		ev.Close()
 
 	})
