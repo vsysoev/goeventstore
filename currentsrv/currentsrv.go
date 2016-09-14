@@ -210,8 +210,16 @@ func handleClient(ctx context.Context) {
 	var (
 		c ClientWithFilter
 	)
+	if ctx.Value("client") == nil {
+		log.Println("No client in context")
+		return
+	}
 	c.client = ctx.Value("client").(*wsock.ClientInterface)
 	c.filter = make(map[int]bool, 0)
+	if ctx.Value("stateUpdate") == nil {
+		log.Println("No stateUpdate in context")
+		return
+	}
 	c.updateChannel = ctx.Value("stateUpdate").(*pubsub.Publisher).Subscribe()
 	fromWS, toWS, doneCh := (*c.client).GetChannels()
 Loop:

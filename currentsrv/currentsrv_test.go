@@ -383,3 +383,13 @@ func TestProcessClientConnection(t *testing.T) {
 		<-time.After(100 * time.Millisecond)
 	})
 }
+func TestHandleClient(t *testing.T) {
+	Convey("When filter is string", t, func() {
+		ctx := context.Background()
+		cli := newNilClient()
+		ctx1 := context.WithValue(ctx, "client", &cli)
+		Convey("It should not panic", func() {
+			So(func() { handleClient(ctx1) }, ShouldNotPanic)
+		})
+	})
+}
