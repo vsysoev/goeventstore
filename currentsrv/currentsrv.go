@@ -46,7 +46,7 @@ type (
 	// ClientWithFilter stores pointer to client and params
 	ClientWithFilter struct {
 		client        *wsock.ClientInterface
-		filter        map[int]bool
+		filter        int
 		updateChannel chan interface{}
 	}
 	// ClientSlice define type for store clients connected
@@ -105,6 +105,7 @@ func scalarHandler(ctx context.Context, stream string, msgs []interface{}) {
 		case "scalar":
 			sState.mx.Lock()
 			splits := strings.Split(stream, "_")
+			log.Println(splits)
 			if len(splits) != 2 {
 				log.Println("Error in scalar stream name", stream)
 				return
@@ -208,14 +209,16 @@ func systemUpdateHandler(ctx context.Context, stream string, msgs []interface{})
 
 func handleClient(ctx context.Context) {
 	var (
-		c ClientWithFilter
+		c         ClientWithFilter
+		bID, vID  float64
+		fltrArray wsock.MessageT
 	)
 	if ctx.Value("client") == nil {
 		log.Println("No client in context")
 		return
 	}
 	c.client = ctx.Value("client").(*wsock.ClientInterface)
-	c.filter = make(map[int]bool, 0)
+	c.filter = 0
 	if ctx.Value("stateUpdate") == nil {
 		log.Println("No stateUpdate in context")
 		return
@@ -231,7 +234,6 @@ Loop:
 			break Loop
 		case msg := <-fromWS:
 			log.Println("Message from WebSocket ", msg)
-			fltrArray := make(wsock.MessageT, 1)
 			err := json.Unmarshal([]byte(msg.String()), &fltrArray)
 			if err != nil {
 				log.Println("Error in filter", err)
@@ -239,31 +241,29 @@ Loop:
 				log.Println("Filter applied", fltrArray)
 				if f, ok := fltrArray["filter"]; ok {
 					for _, fltr := range f.([]interface{}) {
-						if boxID, ok := fltr.(map[string]interface{})["box_id"]; ok {
-							if varID, ok := fltr.(map[string]interface{})["var_id"]; ok {
-								val := int(boxID.(float64))<<16 + int(varID.(float64))
-								c.filter[val] = true
-								log.Println("Added filter to array ", boxID, varID, val)
-								if isCurrent {
-									log.Println(sState.state)
-									for boxID, box := range sState.state {
-										for varID, val := range box {
-											flID := int(boxID)<<16 + int(varID)
-											if _, ok := c.filter[flID]; ok {
-												m := wsock.MessageT{}
-												m["msg"] = val
-												toWS <- &m
-											}
-										}
-									}
+						log.Println("Get element of fltrArray", fltr, fltrArray)
+						if bID, ok = fltr.(map[string]interface{})["box_id"].(float64); !ok {
+							bID = float64(0xFF)
+						}
+						if vID, ok = fltr.(map[string]interface{})["var_id"].(float64); !ok {
+							vID = float64(0xFF)
+						}
+						val := int(bID)<<16 + int(vID)
+						c.filter = c.filter | val
+						log.Println("Added filter to array ", bID, vID, c.filter)
+					}
+					if isCurrent {
+						log.Println(sState.state)
+						for boxID, box := range sState.state {
+							for varID, val := range box {
+								flID := int(boxID)<<16 + int(varID)
+								log.Println(c.filter, flID)
+								if c.filter&flID == flID {
+									m := wsock.MessageT{}
+									m["msg"] = val
+									toWS <- &m
 								}
-							} else {
-								log.Println("Error not varID in filter")
-								c.filter = make(map[int]bool, 0)
 							}
-						} else {
-							log.Println("Error not boxID in filter")
-							c.filter = make(map[int]bool, 0)
 						}
 					}
 				}
@@ -284,8 +284,8 @@ Loop:
 				vID = int(((stateMsg).(bson.M))["event"].(bson.M)["var_id"].(float64))
 			}
 			flID := bID<<16 + vID
-			log.Println("Filter", bID, vID, flID)
-			if _, ok := c.filter[flID]; ok {
+			log.Println("Filter", bID, vID, flID, c.filter, c.filter&flID)
+			if c.filter&flID == flID {
 				m := wsock.MessageT{}
 				m["msg"] = stateMsg
 				toWS <- &m
