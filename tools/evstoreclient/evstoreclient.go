@@ -84,7 +84,8 @@ func genData(ctx context.Context, modeString string, chanOutput chan Message, st
 	)
 	err := json.Unmarshal([]byte(modeString), &mode)
 	if err != nil {
-		log.Panicln("Error in generation mode:", string(modeString))
+		log.Println("Error in generation mode:", string(modeString))
+		return
 	}
 	log.Println(mode)
 	m := mode["mode"].(map[string]interface{})
