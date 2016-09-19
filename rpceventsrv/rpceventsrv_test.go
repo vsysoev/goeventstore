@@ -110,9 +110,9 @@ func initEventStore(url string, dbName string) (evstore.Connection, error) {
 	return evStore, err
 }
 
-func submitNScalars(evStore evstore.Connection, stream string, number int, box_id int, var_id int, delay time.Duration) error {
+func submitNScalars(evStore evstore.Connection, stream string, number int, boxID int, varID int, delay time.Duration) error {
 	for n := 0; n < number; n++ {
-		msg := "{\"box_id\":" + strconv.Itoa(box_id) + ", \"var_id\":" + strconv.Itoa(var_id) + ", \"value\":" + strconv.FormatFloat(float64(n), 'f', -1, 32) + "}"
+		msg := "{\"box_id\":" + strconv.Itoa(boxID) + ", \"var_id\":" + strconv.Itoa(varID) + ", \"value\":" + strconv.FormatFloat(float64(n), 'f', -1, 32) + "}"
 		err := evStore.Committer(stream).SubmitEvent("", "scalar", msg)
 		if err != nil {
 			return err
@@ -231,16 +231,17 @@ func TestGetHistory(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	msg1 := "{\"message\":\"NOT expected\"}"
-	evStore.Committer("scalar").SubmitEvent("", "scalar", msg1)
+	evStore.Committer("scalar_100").SubmitEvent("", "scalar", msg1)
 	<-time.After(1 * time.Second)
 	tStart := time.Now()
 	<-time.After(1 * time.Second)
-	submitNScalars(evStore, "scalar", 10, 1, 1, 100*time.Millisecond)
+	submitNScalars(evStore, "scalar_100", 10, 1, 1, 100*time.Millisecond)
 	tStop := time.Now()
 	<-time.After(2 * time.Second)
-	evStore.Committer("scalar").SubmitEvent("", "scalar", msg1)
+	evStore.Committer("scalar_100").SubmitEvent("", "scalar", msg1)
 	log.Println(tStart, " < ", tStop)
 	p := make(map[string]interface{})
+	p["stream"] = "scalar_100"
 	p["tag"] = "scalar"
 	p["from"] = tStart
 	p["to"] = tStop
@@ -278,15 +279,15 @@ func TestGetHistoryFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 	msg1 := "{\"message\":\"NOT expected\"}"
-	evStore.Committer("scalar").SubmitEvent("", "scalar", msg1)
+	evStore.Committer("scalar_100").SubmitEvent("", "scalar", msg1)
 	<-time.After(1 * time.Second)
 	tStart := time.Now()
 	<-time.After(1 * time.Second)
-	submitNScalars(evStore, "scalar", 10, 1, 1, 100*time.Millisecond)
-	submitNScalars(evStore, "scalar", 20, 1, 2, 100*time.Millisecond)
+	submitNScalars(evStore, "scalar_100", 10, 1, 1, 100*time.Millisecond)
+	submitNScalars(evStore, "scalar_100", 20, 1, 2, 100*time.Millisecond)
 	tStop := time.Now()
 	<-time.After(2 * time.Second)
-	evStore.Committer("scalar").SubmitEvent("", "scalar", msg1)
+	evStore.Committer("scalar_100").SubmitEvent("", "scalar", msg1)
 	log.Println(tStart, " < ", tStop)
 	f, err := getRPCFunction(evStore, "GetHistory")
 	if err != nil {
@@ -296,6 +297,7 @@ func TestGetHistoryFilter(t *testing.T) {
 		t.Fatal("Function is nil")
 	}
 	p := make(map[string]interface{})
+	p["stream"] = "scalar_100"
 	p["tag"] = "scalar"
 	p["from"] = tStart
 	p["to"] = tStop

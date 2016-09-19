@@ -95,7 +95,7 @@ func (p *RPCParameter) AsString(name string) (string, error) {
 			return s, nil
 		}
 	}
-	return "", errors.New("No parameter with " + name + " found.")
+	return "", errors.New("No parameter with name " + name + " found.")
 }
 func (p *RPCParameter) AsInt64(name string) (int64, error) {
 	if val, ok := p.params[name]; ok {
@@ -207,6 +207,7 @@ func (f *RPCFunction) GetHistory(params RPCParameterInterface) (interface{}, err
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "$natural"
+
 	stream, err := params.AsString("stream")
 	if err != nil {
 		return nil, err
