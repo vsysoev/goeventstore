@@ -207,6 +207,11 @@ func (f *RPCFunction) GetHistory(params RPCParameterInterface) (interface{}, err
 		return nil, errors.New("EventStore isn't connected")
 	}
 	sortOrder := "$natural"
+	stream, err := params.AsString("stream")
+	if err != nil {
+		return nil, err
+	}
+
 	tag, err := params.AsString("tag")
 	if err != nil {
 		return nil, err
@@ -230,7 +235,7 @@ func (f *RPCFunction) GetHistory(params RPCParameterInterface) (interface{}, err
 	requestParameter["timestamp"] = make(map[string]interface{})
 	requestParameter["timestamp"].(map[string]interface{})["$gt"] = from
 	requestParameter["timestamp"].(map[string]interface{})["$lt"] = to
-	ch, err := f.evStore.Query(tag).Find(requestParameter, sortOrder)
+	ch, err := f.evStore.Query(stream).Find(requestParameter, sortOrder)
 	return ch, err
 
 }
