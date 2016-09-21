@@ -419,7 +419,6 @@ func clientHandler(ctx context.Context, c wsock.ClientInterface, f *RPCFunction)
 
 Loop:
 	for {
-		log.Println("Reading loop")
 		select {
 		case <-ctx.Done():
 			log.Println("Context Done")
