@@ -157,10 +157,7 @@ func submitEvent2Datastore(url string,
 	}
 	defer ev.Close()
 	err = ev.Committer(tag).SubmitMapStringEvent(seqid, tag, event)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 func handlePostRequest(w http.ResponseWriter, req *http.Request) {
 	props := property.Init()
@@ -195,8 +192,7 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
-		select {
-		case <-c:
+		for range c {
 			syscall.Exit(0)
 		}
 	}()

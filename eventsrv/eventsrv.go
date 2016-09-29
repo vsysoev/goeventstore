@@ -64,12 +64,9 @@ func clientHandler(ctx context.Context, c *wsock.ClientInterface, evStore evstor
 
 	log.Println("Enter main loop serving client")
 Loop:
-	for {
-		select {
-		case <-doneCh:
-			log.Println("Client disconnected. Exit goroutine")
-			break Loop
-		}
+	for range doneCh {
+		log.Println("Client disconnected. Exit goroutine")
+		break Loop
 	}
 	log.Println("Exit clientProcessor")
 }
@@ -108,8 +105,7 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	go func() {
-		select {
-		case <-c:
+		for range c {
 			log.Println("Stop profiling")
 			pprof.StopCPUProfile()
 			syscall.Exit(0)
