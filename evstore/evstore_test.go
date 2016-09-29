@@ -16,8 +16,10 @@ import (
 	"github.com/vsysoev/goeventstore/property"
 )
 
-const mongoURL string = "mongodb://127.0.0.1"
-const dbName string = "evstore_test"
+const (
+	mongoURL string = "mongodb://127.0.0.1"
+	dbName   string = "evstore_test"
+)
 
 type (
 	PositiveListenner struct{}

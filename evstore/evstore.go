@@ -30,6 +30,7 @@ type (
 		c             *CommitterT
 		m             *ManageT
 		q             *QueryT
+		ts            *TimeseriesT
 	}
 	// CommitterT exports Committer interface
 	CommitterT struct {
@@ -61,6 +62,11 @@ type (
 		id      string
 	}
 
+	// TimeseriesT struct for Timeseries interface
+	TimeseriesT struct {
+		c *ConnectionT
+	}
+
 	// Committer interface defines method to commit new event to eventstore
 	Committer interface {
 		PrepareStream() error
@@ -85,8 +91,6 @@ type (
 	}
 	// Manager interface to support internal database functions
 	Manager interface {
-		//DropDatabase just drop database
-		//TODO:20 Remove after testing will be updated
 		DropDatabase(databaseName string) error
 		DatabaseNames() ([]string, error)
 		CollectionNames() ([]string, error)
@@ -106,7 +110,12 @@ type (
 		Listenner2() Listenner2
 		Manager() Manager
 		Query(stream string) Query
+		Timeseries(stream string) Timeseries
 		Close()
+	}
+	//Timeseries interface to manipulate timeseries data
+	Timeseries interface {
+		Submit(eventJSON string) error
 	}
 )
 
@@ -127,10 +136,12 @@ func Dial(url string, dbName string) (Connection, error) {
 	c.m = &ManageT{}
 	c.c = &CommitterT{}
 	c.q = &QueryT{}
+	c.ts = &TimeseriesT{&c}
 	c.l.c = &c
 	c.m.c = &c
 	c.c.c = &c
 	c.q.c = &c
+	c.ts.c = &c
 	return &c, nil
 }
 
@@ -554,4 +565,14 @@ func (q *QueryT) Pipe(aggregationPipeline interface{}) (chan string, error) {
 	}()
 
 	return ch, nil
+}
+
+func (c *ConnectionT) Timeseries(stream string) Timeseries {
+	c.stream = stream
+	c.triggerStream = stream + triggerSuffix
+	return c.ts
+}
+
+func (ts *TimeseriesT) Submit(eventJSON string) error {
+	return errors.New("Not implemented")
 }
