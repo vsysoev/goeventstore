@@ -1,6 +1,9 @@
 package evstore
 
-import "testing"
+import (
+	"log"
+	"testing"
+)
 
 func TestTSEmptyPoint(t *testing.T) {
 	dropTestDatabase(dbName)
@@ -42,12 +45,20 @@ func TestTSOneObject(t *testing.T) {
 		t.Fatal(err)
 	}
 	params := map[string]interface{}{}
-	ch, err := ev.Timeseries("test").Query(params)
+	ch, err := ev.Timeseries("test").Find(params, "")
 	if ch == nil {
 		t.Fatal("channel shouldn't be nil")
 	}
 	if err != nil {
 		t.Fatal(err)
+	}
+	counter := 0
+	for m := range ch {
+		log.Println(m)
+		counter = counter + 1
+	}
+	if counter <= 0 {
+		t.Fatal("It should be one message to find")
 	}
 	ev.Close()
 }

@@ -116,7 +116,7 @@ type (
 	//Timeseries interface to manipulate timeseries data
 	Timeseries interface {
 		Submit(eventJSON string) error
-		Query(params interface{}) (chan string, error)
+		Find(queryParam interface{}, sortOrder string) (chan string, error)
 	}
 )
 
@@ -582,6 +582,37 @@ func (ts *TimeseriesT) Submit(eventJSON string) error {
 	return err
 }
 
-func (ts *TimeseriesT) Query(params interface{}) (chan string, error) {
-	return nil, errors.New("Not implemented")
+func (ts *TimeseriesT) Find(queryParam interface{}, sortOrder string) (chan string, error) {
+	ch := make(chan string, 256)
+
+	go func() {
+		var (
+			result interface{}
+			iter   *mgo.Iter
+		)
+		defer close(ch)
+		if sortOrder != "" {
+			iter = ts.c.session.DB(ts.c.dbName).C(ts.c.stream).Find(queryParam).Sort(sortOrder).Iter()
+		} else {
+			iter = ts.c.session.DB(ts.c.dbName).C(ts.c.stream).Find(queryParam).Iter()
+		}
+		if iter == nil {
+			return
+		}
+		defer iter.Close()
+		if iter.Err() != nil {
+			ch <- iter.Err().Error()
+			return
+		}
+		for iter.Next(&result) {
+			s, err := json.Marshal(result)
+			if err != nil {
+				ch <- err.Error()
+				return
+			}
+			ch <- string(s)
+		}
+	}()
+
+	return ch, nil
 }
