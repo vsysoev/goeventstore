@@ -116,6 +116,7 @@ type (
 	//Timeseries interface to manipulate timeseries data
 	Timeseries interface {
 		Submit(eventJSON string) error
+		Query(params interface{}) (chan string, error)
 	}
 )
 
@@ -574,5 +575,13 @@ func (c *ConnectionT) Timeseries(stream string) Timeseries {
 }
 
 func (ts *TimeseriesT) Submit(eventJSON string) error {
-	return errors.New("Not implemented")
+	var (
+		event map[string]interface{}
+	)
+	err := json.Unmarshal([]byte(eventJSON), &event)
+	return err
+}
+
+func (ts *TimeseriesT) Query(params interface{}) (chan string, error) {
+	return nil, errors.New("Not implemented")
 }
