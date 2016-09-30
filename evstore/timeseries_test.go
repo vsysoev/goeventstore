@@ -15,14 +15,14 @@ func TestTSEmptyPoint(t *testing.T) {
 		t.Fatal("ev should not be nil")
 	}
 	point := ""
-	err = ev.Timeseries("test").Submit(point)
+	err = ev.Timeseries("test").Submit("scalar", point)
 	if err != nil {
 		if err.Error() != "unexpected end of JSON input" {
 			t.Fatal(err)
 		}
 	}
 	point = "{}"
-	err = ev.Timeseries("test").Submit(point)
+	err = ev.Timeseries("test").Submit("scalar", point)
 	if err != nil {
 		if err.Error() != "unexpected end of JSON input" {
 			t.Fatal(err)
@@ -40,7 +40,7 @@ func TestTSOneObject(t *testing.T) {
 		t.Fatal("ev should not be nil")
 	}
 	point := "{\"tag\":\"scalar\"}"
-	err = ev.Timeseries("test").Submit(point)
+	err = ev.Timeseries("test").Submit("scalar", point)
 	if err != nil {
 		t.Fatal(err)
 	}

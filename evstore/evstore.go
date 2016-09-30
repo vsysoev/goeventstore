@@ -65,6 +65,8 @@ type (
 	// TimeseriesT struct for Timeseries interface
 	TimeseriesT struct {
 		c *ConnectionT
+		//TODO: Need lastEvent to store
+		lastEvent map[string]interface{}
 	}
 
 	// Committer interface defines method to commit new event to eventstore
@@ -115,7 +117,7 @@ type (
 	}
 	//Timeseries interface to manipulate timeseries data
 	Timeseries interface {
-		Submit(eventJSON string) error
+		Submit(tag string, eventJSON string) error
 		Find(queryParam interface{}, sortOrder string) (chan string, error)
 	}
 )
@@ -137,7 +139,7 @@ func Dial(url string, dbName string) (Connection, error) {
 	c.m = &ManageT{}
 	c.c = &CommitterT{}
 	c.q = &QueryT{}
-	c.ts = &TimeseriesT{&c}
+	c.ts = &TimeseriesT{&c, nil}
 	c.l.c = &c
 	c.m.c = &c
 	c.c.c = &c
@@ -574,11 +576,23 @@ func (c *ConnectionT) Timeseries(stream string) Timeseries {
 	return c.ts
 }
 
-func (ts *TimeseriesT) Submit(eventJSON string) error {
+func (ts *TimeseriesT) Submit(tag string, eventJSON string) error {
 	var (
-		event map[string]interface{}
+		obj map[string]interface{}
 	)
-	err := json.Unmarshal([]byte(eventJSON), &event)
+	err := json.Unmarshal([]byte(eventJSON), &obj)
+	if err != nil {
+		return err
+	}
+	event := make(map[string]interface{})
+	event["tag"] = tag
+	event["timestamp"] = time.Now()
+	event["event"] = obj
+	err = ts.c.session.DB(ts.c.dbName).C(ts.c.stream).Insert(event)
+	if err != nil {
+		return err
+	}
+	err = ts.c.session.DB(ts.c.dbName).C(ts.c.triggerStream).Insert(bson.M{"trigger": 1})
 	return err
 }
 
