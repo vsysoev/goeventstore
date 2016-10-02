@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
+	"net/http"
+	"net/rpc"
 	"sync"
 	"time"
 
@@ -107,6 +110,8 @@ type (
 		Manager() Manager
 		Query(stream string) Query
 		Close()
+	}
+	RPCType struct {
 	}
 )
 
@@ -554,4 +559,19 @@ func (q *QueryT) Pipe(aggregationPipeline interface{}) (chan string, error) {
 	}()
 
 	return ch, nil
+}
+func (rpc *RPCType) HelloWorld(name string, reply *string) error {
+	*reply = "Hello world " + name + "!"
+	return nil
+}
+
+func main() {
+	rpcCalls := new(RPCType)
+	rpc.Register(rpcCalls)
+	rpc.HandleHTTP()
+	l, e := net.Listen("tcp", ":1234")
+	if e != nil {
+		log.Fatal("listen error:", e)
+	}
+	go http.Serve(l, nil)
 }
