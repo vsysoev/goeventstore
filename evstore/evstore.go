@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"net/rpc"
-	"net/rpc/jsonrpc"
+
+	"github.com/powerman/rpc-codec/jsonrpc2"
+
 	"sync"
 	"time"
 
@@ -112,6 +115,9 @@ type (
 		Close()
 	}
 	RPC struct {
+	}
+	NameArg struct {
+		Msg string
 	}
 )
 
@@ -560,24 +566,19 @@ func (q *QueryT) Pipe(aggregationPipeline interface{}) (chan string, error) {
 
 	return ch, nil
 }
-func (rpc *RPC) Echo(name string, reply *string) error {
-	*reply = name
+func (rpc *RPC) Echo(m NameArg, reply *NameArg) error {
+	*reply = m
 	return nil
 }
 
 func main() {
-	rpcCalls := new(RPC)
-	rpc.Register(rpcCalls)
-	rpc.HandleHTTP()
+	rpc.Register(&RPC{})
+	http.Handle("/rpc", jsonrpc2.HTTPHandler(nil))
 	l, e := net.Listen("tcp", ":1234")
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
-	for {
-		conn, e := l.Accept()
-		if e != nil {
-			log.Fatal(e)
-		}
-		go rpc.ServeCodec(jsonrpc.NewServerCodec(conn))
-	}
+	defer l.Close()
+	http.Serve(l, nil)
+
 }

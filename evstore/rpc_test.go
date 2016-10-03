@@ -2,9 +2,10 @@ package main
 
 import (
 	"log"
-	"net/rpc/jsonrpc"
 	"testing"
 	"time"
+
+	"github.com/powerman/rpc-codec/jsonrpc2"
 )
 
 func runServer() {
@@ -15,41 +16,41 @@ func runServer() {
 func TestRPC(t *testing.T) {
 	runServer()
 	t.Run("Hello world", func(t *testing.T) {
-		var (
-			reply string
+		type (
+			NameArg struct {
+				Msg string
+			}
 		)
-		client, err := jsonrpc.Dial("tcp", "127.0.0.1:1234")
-		if err != nil {
-			t.Fatal("dialing:", err)
-		}
+		var (
+			inp, reply NameArg
+		)
+		// Client use HTTP transport.
+		client := jsonrpc2.NewHTTPClient("http://127.0.0.1:1234/rpc")
+		defer client.Close()
 		if client == nil {
 			t.Fatal("Client should be nil")
 		}
-
-		err = client.Call("RPC.Echo", "Hello world!", &reply)
+		inp = NameArg{"Hello world!"}
+		err := client.Call("RPC.Echo", inp, &reply)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if reply != "Hello world!" {
-			t.Fatal(reply + " != " + "Hello world!")
+		if reply.Msg != inp.Msg {
+			t.Fatal(reply.Msg + " != " + inp.Msg)
 		}
 		log.Println(reply)
 		client.Close()
 	})
 	t.Run("Nil in reply should not panic", func(t *testing.T) {
-		client, err := jsonrpc.Dial("tcp", "127.0.0.1:1234")
-		if err != nil {
-			t.Fatal("dialing:", err)
-		}
+		client := jsonrpc2.NewHTTPClient("http://127.0.0.1:1234/rpc")
+		defer client.Close()
 		if client == nil {
 			t.Fatal("Client should be nil")
 		}
-		log.Println("Before client call")
-		err = client.Call("RPC.Echo", "Hello world!", nil)
+		err := client.Call("RPC.Echo", nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		log.Println("After client call")
 		client.Close()
 	})
 }
