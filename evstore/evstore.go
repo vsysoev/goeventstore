@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"net/rpc"
+	"net/rpc/jsonrpc"
 	"sync"
 	"time"
 
@@ -111,7 +111,7 @@ type (
 		Query(stream string) Query
 		Close()
 	}
-	RPCType struct {
+	RPC struct {
 	}
 )
 
@@ -560,18 +560,24 @@ func (q *QueryT) Pipe(aggregationPipeline interface{}) (chan string, error) {
 
 	return ch, nil
 }
-func (rpc *RPCType) HelloWorld(name string, reply *string) error {
-	*reply = "Hello world " + name + "!"
+func (rpc *RPC) Echo(name string, reply *string) error {
+	*reply = name
 	return nil
 }
 
 func main() {
-	rpcCalls := new(RPCType)
+	rpcCalls := new(RPC)
 	rpc.Register(rpcCalls)
 	rpc.HandleHTTP()
 	l, e := net.Listen("tcp", ":1234")
 	if e != nil {
 		log.Fatal("listen error:", e)
 	}
-	go http.Serve(l, nil)
+	for {
+		conn, e := l.Accept()
+		if e != nil {
+			log.Fatal(e)
+		}
+		go rpc.ServeCodec(jsonrpc.NewServerCodec(conn))
+	}
 }
