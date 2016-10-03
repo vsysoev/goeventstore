@@ -39,6 +39,11 @@ type (
 		Tag     string
 		Payload string
 	}
+	ClientType struct {
+		e evstore.Connection
+		c wsock.ClientInterface
+		s wsock.ServerInterface
+	}
 )
 
 func (rpc *RPC) Echo(m NameArg, reply *NameArg) error {
@@ -68,18 +73,18 @@ func messageHandler(ctx context.Context, stream string, msg []interface{}) {
 	log.Println("Msg sent")
 }
 
-func clientHandler(ctx context.Context, c *wsock.ClientInterface, evStore evstore.Connection) {
+func (client *ClientType) clientHandler(ctx context.Context) {
 	var (
 		err error
 	)
 	//	state := make(ScalarState)
-	log.Println("clientProcessor Client connected. ", (*c).Request())
-	id := (*c).Request().FormValue("id")
-	tag := (*c).Request().FormValue("tag")
-	stream := (*c).Request().FormValue("stream")
-	_, toWS, doneCh := (*c).GetChannels()
+	log.Println("clientProcessor Client connected. ", client.c.Request())
+	id := client.c.Request().FormValue("id")
+	tag := client.c.Request().FormValue("tag")
+	stream := client.c.Request().FormValue("stream")
+	_, toWS, doneCh := client.c.GetChannels()
 	if tag != "" {
-		err = evStore.Listenner2().Subscribe2(stream, tag, "", messageHandler)
+		err = client.e.Listenner2().Subscribe2(stream, tag, "", messageHandler)
 		if err != nil {
 			log.Println("Can't subscribe to evStore", err)
 			return
@@ -87,7 +92,7 @@ func clientHandler(ctx context.Context, c *wsock.ClientInterface, evStore evstor
 		ctx2 := context.WithValue(ctx, "toWS", toWS)
 		ctx3, cancel := context.WithCancel(ctx2)
 		defer cancel()
-		go evStore.Listenner2().Listen(ctx3, id)
+		go client.e.Listenner2().Listen(ctx3, id)
 	} else {
 		js := wsock.MessageT{}
 		js["response"] = "ERROR: No tag to subscribe"
@@ -106,9 +111,9 @@ Loop:
 	log.Println("Exit clientProcessor")
 }
 
-func processClientConnection(s wsock.ServerInterface, evStore evstore.Connection) {
+func (client *ClientType) processClientConnections() {
 	log.Println("Enter processClientConnection")
-	addCh, delCh, doneCh, _ := s.GetChannels()
+	addCh, delCh, doneCh, _ := client.s.GetChannels()
 	log.Println("Get server channels", addCh, delCh, doneCh)
 Loop:
 	for {
@@ -117,7 +122,8 @@ Loop:
 			log.Println("processClientConnection got add client notification", (*cli).Request().FormValue("id"))
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			go clientHandler(ctx, cli, evStore)
+			client.c = *cli
+			go client.clientHandler(ctx)
 			break
 		case cli := <-delCh:
 			log.Println("delCh go client", cli)
@@ -147,23 +153,22 @@ func main() {
 			syscall.Exit(0)
 		}
 	}()
-
+	cl := ClientType{}
 	props := property.Init()
-	evStore, err := evstore.Dial(props["mongodb.url"], props["mongodb.db"])
+	cl.e, err = evstore.Dial(props["mongodb.url"], props["mongodb.db"])
 	if err != nil {
 		log.Fatalln("Error connecting to event store. ", err)
 	}
-	wsServer := wsock.NewServer(props["events.uri"])
-	if wsServer == nil {
+	defer cl.e.Close()
+	cl.s = wsock.NewServer(props["events.uri"])
+	if cl.s == nil {
 		log.Fatalln("Error creating new websocket server")
 	}
-	go processClientConnection(wsServer, evStore)
-	go wsServer.Listen()
+	go cl.processClientConnections()
+	go cl.s.Listen()
 
-	//http.Handle(props["static.url"], http.FileServer(http.Dir("webroot")))
-	rpc.Register(&RPC{evStore})
+	rpc.Register(&RPC{cl.e})
 	http.Handle("/rpc", jsonrpc2.HTTPHandler(nil))
 
 	err = http.ListenAndServe(props["events.url"], nil)
-	evStore.Close()
 }
