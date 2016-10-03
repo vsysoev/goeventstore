@@ -53,4 +53,30 @@ func TestRPC(t *testing.T) {
 		}
 		client.Close()
 	})
+	t.Run("SubmitEvent", func(t *testing.T) {
+		type MessageArg struct {
+			Stream  string
+			SeqID   string
+			Tag     string
+			Payload string
+		}
+		var reply bool
+		client := jsonrpc2.NewHTTPClient("http://127.0.0.1:1234/rpc")
+		defer client.Close()
+		if client == nil {
+			t.Fatal("Client should be nil")
+		}
+		msg := MessageArg{}
+		msg.Stream = "test"
+		msg.SeqID = ""
+		msg.Tag = "scalar"
+		msg.Payload = "{\"var_id\": 1, \"value\":12.5}"
+		log.Println("Msg is ", msg)
+		err := client.Call("RPC.Submit", msg, &reply)
+		if err != nil {
+			t.Fatal(err)
+		}
+		client.Close()
+	})
+
 }

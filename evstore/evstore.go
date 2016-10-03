@@ -10,6 +10,7 @@ import (
 	"net/rpc"
 
 	"github.com/powerman/rpc-codec/jsonrpc2"
+	"github.com/vsysoev/goeventstore/property"
 
 	"sync"
 	"time"
@@ -115,9 +116,16 @@ type (
 		Close()
 	}
 	RPC struct {
+		c Connection
 	}
 	NameArg struct {
 		Msg string
+	}
+	MessageArg struct {
+		Stream  string
+		SeqID   string
+		Tag     string
+		Payload string
 	}
 )
 
@@ -571,8 +579,23 @@ func (rpc *RPC) Echo(m NameArg, reply *NameArg) error {
 	return nil
 }
 
+func (rpc *RPC) Submit(m MessageArg, reply *bool) error {
+	*reply = true
+	log.Println("MessageArg is ", m)
+	err := rpc.c.Committer(m.Stream).SubmitEvent(m.SeqID, m.Tag, m.Payload)
+	if err != nil {
+		*reply = false
+	}
+	return err
+}
+
 func main() {
-	rpc.Register(&RPC{})
+	props := property.Init()
+	evStore, err := Dial(props["mongodb.url"], props["mongodb.db"])
+	if err != nil {
+		log.Fatalln("Error connecting to event store. ", err)
+	}
+	rpc.Register(&RPC{evStore})
 	http.Handle("/rpc", jsonrpc2.HTTPHandler(nil))
 	l, e := net.Listen("tcp", ":1234")
 	if e != nil {
