@@ -1,4 +1,4 @@
-package main
+package evstore
 
 import (
 	"encoding/json"

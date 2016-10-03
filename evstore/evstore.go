@@ -1,16 +1,10 @@
-package main
+package evstore
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"net"
-	"net/http"
-	"net/rpc"
-
-	"github.com/powerman/rpc-codec/jsonrpc2"
-	"github.com/vsysoev/goeventstore/property"
 
 	"sync"
 	"time"
@@ -114,18 +108,6 @@ type (
 		Manager() Manager
 		Query(stream string) Query
 		Close()
-	}
-	RPC struct {
-		c Connection
-	}
-	NameArg struct {
-		Msg string
-	}
-	MessageArg struct {
-		Stream  string
-		SeqID   string
-		Tag     string
-		Payload string
 	}
 )
 
@@ -573,35 +555,4 @@ func (q *QueryT) Pipe(aggregationPipeline interface{}) (chan string, error) {
 	}()
 
 	return ch, nil
-}
-func (rpc *RPC) Echo(m NameArg, reply *NameArg) error {
-	*reply = m
-	return nil
-}
-
-func (rpc *RPC) Submit(m MessageArg, reply *bool) error {
-	*reply = true
-	log.Println("MessageArg is ", m)
-	err := rpc.c.Committer(m.Stream).SubmitEvent(m.SeqID, m.Tag, m.Payload)
-	if err != nil {
-		*reply = false
-	}
-	return err
-}
-
-func main() {
-	props := property.Init()
-	evStore, err := Dial(props["mongodb.url"], props["mongodb.db"])
-	if err != nil {
-		log.Fatalln("Error connecting to event store. ", err)
-	}
-	rpc.Register(&RPC{evStore})
-	http.Handle("/rpc", jsonrpc2.HTTPHandler(nil))
-	l, e := net.Listen("tcp", ":1234")
-	if e != nil {
-		log.Fatal("listen error:", e)
-	}
-	defer l.Close()
-	http.Serve(l, nil)
-
 }

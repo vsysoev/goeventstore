@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"net/rpc"
 	"os"
 	"os/signal"
 	"runtime/pprof"
@@ -11,6 +12,7 @@ import (
 
 	"context"
 
+	"github.com/powerman/rpc-codec/jsonrpc2"
 	"github.com/vsysoev/goeventstore/evstore"
 	"github.com/vsysoev/goeventstore/property"
 	"github.com/vsysoev/goeventstore/wsock"
@@ -23,6 +25,36 @@ import (
 const (
 	timeout = time.Millisecond * 10
 )
+
+type (
+	RPC struct {
+		c evstore.Connection
+	}
+	NameArg struct {
+		Msg string
+	}
+	MessageArg struct {
+		Stream  string
+		SeqID   string
+		Tag     string
+		Payload string
+	}
+)
+
+func (rpc *RPC) Echo(m NameArg, reply *NameArg) error {
+	*reply = m
+	return nil
+}
+
+func (rpc *RPC) Submit(m MessageArg, reply *bool) error {
+	*reply = true
+	log.Println("MessageArg is ", m)
+	err := rpc.c.Committer(m.Stream).SubmitEvent(m.SeqID, m.Tag, m.Payload)
+	if err != nil {
+		*reply = false
+	}
+	return err
+}
 
 func messageHandler(ctx context.Context, stream string, msg []interface{}) {
 	log.Println("Msgs received")
@@ -129,6 +161,9 @@ func main() {
 	go wsServer.Listen()
 
 	//http.Handle(props["static.url"], http.FileServer(http.Dir("webroot")))
+	rpc.Register(&RPC{evStore})
+	http.Handle("/rpc", jsonrpc2.HTTPHandler(nil))
+
 	err = http.ListenAndServe(props["events.url"], nil)
 	evStore.Close()
 }

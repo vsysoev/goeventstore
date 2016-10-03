@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/powerman/rpc-codec/jsonrpc2"
+	"github.com/vsysoev/goeventstore/property"
 )
 
 func runServer() {
@@ -15,6 +16,8 @@ func runServer() {
 
 func TestRPC(t *testing.T) {
 	runServer()
+	props := property.Init()
+
 	t.Run("Hello world", func(t *testing.T) {
 		type (
 			NameArg struct {
@@ -25,7 +28,7 @@ func TestRPC(t *testing.T) {
 			inp, reply NameArg
 		)
 		// Client use HTTP transport.
-		client := jsonrpc2.NewHTTPClient("http://127.0.0.1:1234/rpc")
+		client := jsonrpc2.NewHTTPClient("http://127.0.0.1" + props["events.url"] + "/rpc")
 		defer client.Close()
 		if client == nil {
 			t.Fatal("Client should be nil")
@@ -42,7 +45,7 @@ func TestRPC(t *testing.T) {
 		client.Close()
 	})
 	t.Run("Nil in reply should not panic", func(t *testing.T) {
-		client := jsonrpc2.NewHTTPClient("http://127.0.0.1:1234/rpc")
+		client := jsonrpc2.NewHTTPClient("http://127.0.0.1" + props["events.url"] + "/rpc")
 		defer client.Close()
 		if client == nil {
 			t.Fatal("Client should be nil")
@@ -61,7 +64,7 @@ func TestRPC(t *testing.T) {
 			Payload string
 		}
 		var reply bool
-		client := jsonrpc2.NewHTTPClient("http://127.0.0.1:1234/rpc")
+		client := jsonrpc2.NewHTTPClient("http://127.0.0.1" + props["events.url"] + "/rpc")
 		defer client.Close()
 		if client == nil {
 			t.Fatal("Client should be nil")
