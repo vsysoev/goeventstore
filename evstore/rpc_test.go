@@ -1,4 +1,4 @@
-package evstore
+package main
 
 import (
 	"log"
