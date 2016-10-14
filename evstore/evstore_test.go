@@ -77,6 +77,8 @@ func TestListen2Interface(t *testing.T) {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
+		err = ev.Committer("events").PrepareStream()
+		So(err, ShouldBeNil)
 		ev.Committer("events").SubmitEvent("", "fake", "{\"event\":\"fake\"}")
 		So(err, ShouldBeNil)
 		id := ev.Listenner2().GetLastID("events")
@@ -89,6 +91,10 @@ func TestListen2Interface(t *testing.T) {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
+		err = ev.Committer("scalars").PrepareStream()
+		So(err, ShouldBeNil)
+		err = ev.Committer("vectors").PrepareStream()
+		So(err, ShouldBeNil)
 		err = ev.Listenner2().Subscribe2("scalars", "scalar", "", scalarHandler)
 		So(err, ShouldBeNil)
 		err = ev.Listenner2().Subscribe2("scalars", "vector", "", scalarHandler)
@@ -107,16 +113,20 @@ func TestListen2Interface(t *testing.T) {
 		ev, err := Dial(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
+		err = ev.Committer("scalars").PrepareStream()
+		So(err, ShouldBeNil)
+		err = ev.Committer("vectors").PrepareStream()
+		So(err, ShouldBeNil)
 		err = ev.Listenner2().Subscribe2("scalars", "scalar", "", scalarHandler)
 		So(err, ShouldBeNil)
 		err = ev.Listenner2().Subscribe2("vectors", "vector", "", scalarHandler)
 		So(err, ShouldBeNil)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 		defer cancel()
 		scalarCounter = 100
 		vectorCounter = 100
 		go ev.Listenner2().Listen(ctx, "")
-		for i := 0; i < 100; i++ {
+		for i := 100; i < 200; i++ {
 			err = ev.Committer("scalars").SubmitEvent("", "scalar", "{\"value\":"+strconv.Itoa(i)+"}")
 			So(err, ShouldBeNil)
 			err = ev.Committer("vectors").SubmitEvent("", "vector", "{\"vector\":"+strconv.Itoa(i)+"}")
@@ -267,20 +277,17 @@ func TestManagerInterface(t *testing.T) {
 	})
 }
 
-func sampleHandler(ctx context.Context, stream string, events []interface{}) {
-	for _, event := range events {
-		log.Println(event)
-	}
+func sampleHandler(ctx context.Context, stream string, event interface{}) {
+	log.Println(event)
 }
-func panicHandler(ctx context.Context, stream string, event []interface{}) {
+func panicHandler(ctx context.Context, stream string, event interface{}) {
 	panic("panic Handler fired")
 }
-func scalarHandler(ctx context.Context, stream string, events []interface{}) {
-	log.Println(stream)
+func scalarHandler(ctx context.Context, stream string, event interface{}) {
 	switch stream {
 	case "scalars":
-		scalarCounter = scalarCounter - len(events)
+		scalarCounter = scalarCounter - 1
 	case "vectors":
-		vectorCounter = vectorCounter - len(events)
+		vectorCounter = vectorCounter - 1
 	}
 }

@@ -3,7 +3,6 @@ package evstore
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -22,14 +21,13 @@ const (
 type (
 	// Connection exports mondodb connection attributes
 	ConnectionT struct {
-		session       *mgo.Session
-		dbName        string
-		stream        string
-		triggerStream string
-		l             *ListennerT
-		c             *CommitterT
-		m             *ManageT
-		q             *QueryT
+		session *mgo.Session
+		dbName  string
+		stream  string
+		l       *ListennerT
+		c       *CommitterT
+		m       *ManageT
+		q       *QueryT
 	}
 	// CommitterT exports Committer interface
 	CommitterT struct {
@@ -67,14 +65,9 @@ type (
 		SubmitEvent(sequenceID string, tag string, eventJSON string) error
 		SubmitMapStringEvent(sequenceID string, tag string, body map[string]interface{}) error
 	}
-	// Listenner interface defines method to listen events from the datastore
-	Listenner interface {
-		Subscribe(fromID string) (chan string, error)
-		Unsubscribe(eventChannel chan string)
-	}
 
 	// Handler type defines function which will be used as callback
-	Handler func(ctx context.Context, stream string, event []interface{})
+	Handler func(ctx context.Context, stream string, event interface{})
 	// Listenner2 interface is replacement of Listenner
 	// TODO:10 Remove Listenner interface and rename Listenner2 to Listenner
 	Listenner2 interface {
@@ -102,7 +95,6 @@ type (
 	//Connection interface
 	Connection interface {
 		Committer(stream string) Committer
-		Listenner(stream string) Listenner
 		Listenner2() Listenner2
 		Manager() Manager
 		Query(stream string) Query
@@ -142,16 +134,7 @@ func (c *ConnectionT) Close() {
 // Committer return committer object which implement Committer interface
 func (c *ConnectionT) Committer(stream string) Committer {
 	c.stream = stream
-	c.triggerStream = stream + triggerSuffix
 	return c.c
-}
-
-// Listenner returns listenner object which implments Listenner interface
-func (c *ConnectionT) Listenner(stream string) Listenner {
-	c.l.wg = &sync.WaitGroup{}
-	c.stream = stream
-	c.triggerStream = stream + triggerSuffix
-	return c.l
 }
 
 // SubmitEvent submittes event to event store
@@ -170,7 +153,6 @@ func (c *CommitterT) SubmitEvent(sequenceID string, tag string, eventJSON string
 	if err != nil {
 		return err
 	}
-	err = c.c.session.DB(c.c.dbName).C(c.c.triggerStream).Insert(bson.M{"trigger": 1})
 	return err
 }
 
@@ -182,14 +164,6 @@ func (c *CommitterT) SubmitMapStringEvent(sequenceID string, tag string, body ma
 	event["event"] = body
 	event["timestamp"] = time.Now()
 	err := c.c.session.DB(c.c.dbName).C(c.c.stream).Insert(event)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	err = c.c.session.DB(c.c.dbName).C(c.c.triggerStream).Insert(bson.M{"trigger": 1})
-	if err != nil {
-		log.Println(err)
-	}
 	return err
 }
 
@@ -198,12 +172,13 @@ func (c *CommitterT) PrepareStream() error {
 	if err != nil {
 		return err
 	}
-	if !contains(collections, c.c.triggerStream) {
+	if !contains(collections, c.c.stream) {
 		cInfo := mgo.CollectionInfo{
 			Capped:   true,
 			MaxBytes: 1000000,
+			MaxDocs:  10000,
 		}
-		err = c.c.session.DB(c.c.dbName).C(c.c.triggerStream).Create(&cInfo)
+		err = c.c.session.DB(c.c.dbName).C(c.c.stream).Create(&cInfo)
 	}
 	return err
 }
@@ -223,98 +198,6 @@ func (c *ConnectionT) readEvents(fromID string) (*mgo.Iter, error) {
 		iter = c.session.DB(c.dbName).C(c.stream).Find(nil).Iter()
 	}
 	return iter, nil
-}
-
-// Subscribe returns channel from event store
-func (e *ListennerT) Subscribe(fromID string) (chan string, error) {
-	if e.c.session == nil {
-		return nil, errors.New("Mongo isn't connected. Please use Dial().")
-	}
-	cTrigger := e.c.session.DB(e.c.dbName).C(e.c.triggerStream)
-	var lastTriggerID string
-	var lastEventID string
-	if fromID != "" {
-		lastEventID = fromID
-	}
-	var result map[string]interface{}
-	outChan := make(chan string, chanBufSize)
-	e.done = make(chan bool)
-	go func() {
-		var (
-			iter     *mgo.Iter
-			oneEvent map[string]interface{}
-		)
-		defer func() {
-			e.done <- true
-			close(outChan)
-		}()
-		iterLast := cTrigger.Find(nil).Sort("-$natural").Limit(2).Iter()
-		for iterLast.Next(&result) {
-			lastTriggerID = result["_id"].(bson.ObjectId).Hex()
-		}
-		iterLast.Close()
-		iter = cTrigger.Find(bson.M{"_id": bson.M{"$gt": bson.ObjectIdHex(lastTriggerID)}}).Sort("$natural").Tail(10 * time.Millisecond)
-	Loop:
-		for {
-			for iter.Next(&result) {
-				lastTriggerID = result["_id"].(bson.ObjectId).Hex()
-				evIter, err := e.c.readEvents(lastEventID)
-				if err != nil {
-					log.Println(err)
-					return
-				}
-				for evIter.Next(&oneEvent) {
-					lastEventID = string(oneEvent["_id"].(bson.ObjectId).Hex())
-					s, err := json.Marshal(oneEvent)
-					if err != nil {
-						log.Println(err)
-						return
-					}
-					select {
-					case <-e.done:
-						break Loop
-					default:
-						break
-					}
-					outChan <- string(s)
-				}
-				evIter.Close()
-			}
-			er := iter.Err()
-			if er != nil {
-				log.Println(er)
-				return
-			}
-			select {
-			case <-e.done:
-				break Loop
-			default:
-				break
-			}
-			if iter.Timeout() {
-				continue
-			}
-			qNext := cTrigger.Find(bson.M{"_id": bson.M{"$gt": lastTriggerID}})
-
-			iter = qNext.Sort("$natural").Tail(10 * time.Millisecond)
-		}
-		return
-	}()
-	return outChan, nil
-}
-
-// Unsubscribe closes channel
-func (e *ListennerT) Unsubscribe(eventChannel chan string) {
-	if eventChannel == nil {
-		return
-	}
-	select {
-	case <-eventChannel:
-		break
-	default:
-		break
-	}
-	e.done <- true
 }
 
 // Listenner2 - new implementation of listenner function. Will replace Listenner
@@ -397,27 +280,54 @@ func (c *ConnectionT) readEventsLimit(stream string, filter string, fromID strin
 }
 
 func (e *ListennerT) processSubscription(ctx context.Context, stream, filter string, id string, handler Handler) {
+	var (
+		q      map[string]interface{}
+		result map[string]interface{}
+		lastID bson.ObjectId
+	)
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Println("Handler function panic detected. Recovering", r)
+			log.Println("Handler function panic detected. Recovering", r)
 		}
 	}()
+	sessionCopy := e.c.session.Copy()
+	defer sessionCopy.Close()
+	if id != "" {
+		if !bson.IsObjectIdHex(id) {
+			log.Println("Incorrect id ", id)
+			return
+		}
+		objID := bson.ObjectIdHex(id)
+		q["_id"] = bson.M{"$gt": objID}
+	}
+	iter := sessionCopy.DB(e.c.dbName).C(stream).Find(nil).Sort("$natural").Tail(-1)
+	if iter == nil {
+		log.Println("Iterator is nil")
+		return
+	}
 	for {
-		result, err := e.c.readEventsLimit(stream, filter, id, 1000)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		if len(result) > 0 {
+		for iter.Next(&result) {
 			handler(ctx, stream, result)
-			id = result[len(result)-1].(bson.M)["_id"].(bson.ObjectId).Hex()
+			lastID = result["_id"].(bson.ObjectId)
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(time.Millisecond * 10):
+		if iter.Timeout() {
+			continue
+		}
+		if iter.Err() != nil {
+			log.Println("Iterator error is ", iter.Err())
+			iter.Close()
 			break
 		}
+		select {
+		default:
+		case <-ctx.Done():
+			log.Println("Ctx.Done()")
+			return
+		}
+		if lastID != "" {
+			q["_id"] = bson.M{"$gt": lastID}
+		}
+		iter = sessionCopy.DB(e.c.dbName).C(stream).Find(q).Sort("$natural").Tail(1)
 	}
 }
 
@@ -450,7 +360,6 @@ func (m *ManageT) CollectionNames() ([]string, error) {
 
 func (c *ConnectionT) Query(stream string) Query {
 	c.stream = stream
-	c.triggerStream = stream + triggerSuffix
 	return c.q
 }
 
