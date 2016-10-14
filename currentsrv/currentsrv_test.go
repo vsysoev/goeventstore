@@ -41,6 +41,7 @@ type (
 )
 
 var (
+	m         sync.Mutex
 	msgNumber int
 )
 
@@ -143,7 +144,9 @@ func (s *stubServer) Listen() {
 func Handler(ctx context.Context, stream string, msg interface{}) {
 	log.Println("Enter handler")
 	log.Println(msg)
+	m.Lock()
 	msgNumber = msgNumber - 1
+	m.Unlock()
 }
 
 func initEventStore(url string, dbName string) (evstore.Connection, error) {
@@ -166,7 +169,9 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func respondBoxHandler(ctx context.Context, stream string, msg interface{}) {
+	m.Lock()
 	msgNumber = msgNumber - 1
+	m.Unlock()
 }
 func TestRespondBoxState(t *testing.T) {
 	Convey("When i commit respondbox message", t, func() {
@@ -179,7 +184,9 @@ func TestRespondBoxState(t *testing.T) {
 		defer cancel()
 		go ev.Listenner2().Listen(ctx, "")
 		So(err, ShouldBeNil)
+		m.Lock()
 		msgNumber = 9
+		m.Unlock()
 		for i := 1; i < 10; i++ {
 			boxID := strconv.Itoa(i)
 			sendMsg := "{\"box_id\":" + boxID + "}"
@@ -187,7 +194,9 @@ func TestRespondBoxState(t *testing.T) {
 			So(err, ShouldBeNil)
 		}
 		<-time.After(1 * time.Second)
+		m.Lock()
 		So(msgNumber, ShouldEqual, 0)
+		m.Unlock()
 	})
 }
 func TestCurrentScalarState(t *testing.T) {
@@ -205,7 +214,9 @@ func TestCurrentScalarState(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		go ev.Listenner2().Listen(ctx, "")
+		m.Lock()
 		msgNumber = 9
+		m.Unlock()
 		for i := 1; i < 10; i++ {
 			varID := strconv.Itoa(rand.Intn(200))
 			val := strconv.FormatFloat(rand.NormFloat64(), 'f', 2, 64)
@@ -214,7 +225,9 @@ func TestCurrentScalarState(t *testing.T) {
 			So(err, ShouldBeNil)
 		}
 		<-time.After(1 * time.Second)
+		m.Lock()
 		So(msgNumber, ShouldEqual, 0)
+		m.Unlock()
 		ev.Close()
 	})
 }
