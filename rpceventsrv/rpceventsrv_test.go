@@ -34,9 +34,6 @@ func NewFailedFakeDB() (evstore.Connection, error) {
 func (f *fakeDB) Committer(stream string) evstore.Committer {
 	return &fakeCommitter{}
 }
-func (f *fakeDB) Listenner(stream string) evstore.Listenner {
-	return &fakeListenner{}
-}
 func (f *fakeDB) Listenner2() evstore.Listenner2 {
 	return &fakeListenner2{}
 }

@@ -24,7 +24,7 @@ const (
 	timeout = time.Millisecond * 10
 )
 
-func messageHandler(ctx context.Context, stream string, msg []interface{}) {
+func messageHandler(ctx context.Context, stream string, msg interface{}) {
 	log.Println("Msgs received")
 	toWS := ctx.Value("toWS").(chan *wsock.MessageT)
 

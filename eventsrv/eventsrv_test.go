@@ -19,11 +19,9 @@ const (
 	dbName   string = "eventsrv_test"
 )
 
-func handlerTest(ctx context.Context, stream string, events []interface{}) {
-	for _, ev := range events {
-		log.Println(ev)
-		//		ctx.Value("id") = ev.(bson.M)["_id"].(bson.ObjectId).Hex()
-	}
+func handlerTest(ctx context.Context, stream string, ev interface{}) {
+	log.Println(ev)
+	//		ctx.Value("id") = ev.(bson.M)["_id"].(bson.ObjectId).Hex()
 }
 func TestEventSrv(t *testing.T) {
 	Convey("When commit current message to database", t, func() {

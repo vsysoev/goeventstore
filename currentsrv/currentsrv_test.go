@@ -140,10 +140,10 @@ func (s *stubServer) Listen() {
 	<-time.After(2 * time.Second)
 }
 
-func Handler(ctx context.Context, stream string, msgs []interface{}) {
+func Handler(ctx context.Context, stream string, msg interface{}) {
 	log.Println("Enter handler")
-	log.Println(msgs)
-	msgNumber = msgNumber - len(msgs)
+	log.Println(msg)
+	msgNumber = msgNumber - 1
 }
 
 func initEventStore(url string, dbName string) (evstore.Connection, error) {
@@ -165,8 +165,8 @@ func TestDropDatabase(t *testing.T) {
 	})
 }
 
-func respondBoxHandler(ctx context.Context, stream string, msgs []interface{}) {
-	msgNumber = msgNumber - len(msgs)
+func respondBoxHandler(ctx context.Context, stream string, msg interface{}) {
+	msgNumber = msgNumber - 1
 }
 func TestRespondBoxState(t *testing.T) {
 	Convey("When i commit respondbox message", t, func() {
@@ -174,6 +174,7 @@ func TestRespondBoxState(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
 		ctx, cancel := context.WithCancel(context.Background())
+		ev.Committer("systemupdate").PrepareStream()
 		err = ev.Listenner2().Subscribe2("systemupdate", "respondbox", "", respondBoxHandler)
 		defer cancel()
 		go ev.Listenner2().Listen(ctx, "")
@@ -194,6 +195,7 @@ func TestCurrentScalarState(t *testing.T) {
 		ev, err := initEventStore(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
+		ev.Committer("scalar_1").PrepareStream()
 
 		err = ev.Listenner2().Subscribe2("scalar_1", "scalar", "", Handler)
 		So(err, ShouldBeNil)
@@ -219,13 +221,11 @@ func TestCurrentScalarState(t *testing.T) {
 
 func TestScalarHandler(t *testing.T) {
 	Convey("When pass empty message slice to scalarHandler", t, func() {
-		var msgs []interface{}
 		Convey("It should not panic", func() {
-			So(func() { scalarHandler(context.Background(), "", msgs) }, ShouldNotPanic)
+			So(func() { scalarHandler(context.Background(), "", nil) }, ShouldNotPanic)
 		})
 	})
 	Convey("When pass message with int boxID, varID", t, func() {
-		var msgs []interface{}
 		sState = ScalarState{}
 		sState.state = make(map[int]map[int]*bson.M)
 		sState.mx = &sync.Mutex{}
@@ -233,13 +233,11 @@ func TestScalarHandler(t *testing.T) {
 		ctx := context.WithValue(context.Background(), "stateUpdate", stateUpdateChannel)
 		id := bson.NewObjectId()
 		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": 1, "var_id": 1, "value": 1.5}}
-		msgs = append(msgs, msg)
 		Convey("It should not panic with type assertion", func() {
-			So(func() { scalarHandler(ctx, "", msgs) }, ShouldNotPanic)
+			So(func() { scalarHandler(ctx, "", msg) }, ShouldNotPanic)
 		})
 	})
 	Convey("When pass message with float64 boxID, varID", t, func() {
-		var msgs []interface{}
 		sState = ScalarState{}
 		sState.state = make(map[int]map[int]*bson.M)
 		sState.mx = &sync.Mutex{}
@@ -247,13 +245,11 @@ func TestScalarHandler(t *testing.T) {
 		ctx := context.WithValue(context.Background(), "stateUpdate", stateUpdateChannel)
 		id := bson.NewObjectId()
 		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": 1.0, "var_id": 1.0, "value": 1.5}}
-		msgs = append(msgs, msg)
 		Convey("It should not panic with type assertion", func() {
-			So(func() { scalarHandler(ctx, "stateUpdate", msgs) }, ShouldNotPanic)
+			So(func() { scalarHandler(ctx, "stateUpdate", msg) }, ShouldNotPanic)
 		})
 	})
 	Convey("When pass message with string boxID, varID", t, func() {
-		var msgs []interface{}
 		sState = ScalarState{}
 		sState.state = make(map[int]map[int]*bson.M)
 		sState.mx = &sync.Mutex{}
@@ -261,13 +257,11 @@ func TestScalarHandler(t *testing.T) {
 		ctx := context.WithValue(context.Background(), "stateUpdateChannel", stateUpdateChannel)
 		id := bson.NewObjectId()
 		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": "1.0", "var_id": "1.0", "value": 1.5}}
-		msgs = append(msgs, msg)
 		Convey("It should not panic with type assertion", func() {
-			So(func() { scalarHandler(ctx, "scalar", msgs) }, ShouldNotPanic)
+			So(func() { scalarHandler(ctx, "scalar", msg) }, ShouldNotPanic)
 		})
 	})
 	Convey("When pass message with int boxID and string varID", t, func() {
-		var msgs []interface{}
 		sState = ScalarState{}
 		sState.state = make(map[int]map[int]*bson.M)
 		sState.mx = &sync.Mutex{}
@@ -275,41 +269,37 @@ func TestScalarHandler(t *testing.T) {
 		ctx := context.WithValue(context.Background(), "stateUpdateChannel", stateUpdateChannel)
 		id := bson.NewObjectId()
 		msg := bson.M{"_id": id, "tag": "scalar", "event": bson.M{"box_id": 1, "var_id": "1.0", "value": 1.5}}
-		msgs = append(msgs, msg)
 		Convey("It should not panic with type assertion", func() {
-			So(func() { scalarHandler(ctx, "", msgs) }, ShouldNotPanic)
+			So(func() { scalarHandler(ctx, "", msg) }, ShouldNotPanic)
 		})
 	})
 }
 
 func TestSystemUpdateHandler(t *testing.T) {
 	Convey("When pass empty message slice to systemUpdateHandler", t, func() {
-		var msgs []interface{}
+		var msg interface{}
 		Convey("It should not panic", func() {
-			So(func() { systemUpdateHandler(context.Background(), "", msgs) }, ShouldNotPanic)
+			So(func() { systemUpdateHandler(context.Background(), "", msg) }, ShouldNotPanic)
 		})
 	})
 	Convey("When EventStore isn't defined", t, func() {
-		var msgs []interface{}
 		ctx := context.Background()
 		id := bson.NewObjectId()
 		msg := bson.M{"_id": id, "tag": "respondbox", "event": bson.M{"box_id": 1}}
-		msgs = append(msgs, msg)
 		Convey("It should not be panic", func() {
-			So(func() { systemUpdateHandler(ctx, "sysupdate", msgs) }, ShouldNotPanic)
+			So(func() { systemUpdateHandler(ctx, "sysupdate", msg) }, ShouldNotPanic)
 		})
 	})
 	Convey("When respondbox sent", t, func() {
 		ev, err := initEventStore(mongoURL, dbName)
 		So(err, ShouldBeNil)
 		So(ev, ShouldNotBeNil)
-		var msgs []interface{}
+		var msg interface{}
 		ctx := context.WithValue(context.Background(), "evStore", ev)
 		id := bson.NewObjectId()
-		msg := bson.M{"_id": id, "tag": "respondbox", "event": bson.M{"box_id": 1}}
-		msgs = append(msgs, msg)
+		msg = bson.M{"_id": id, "tag": "respondbox", "event": bson.M{"box_id": 1}}
 		Convey("It should not panic with type assertion", func() {
-			So(func() { systemUpdateHandler(ctx, "sysupdate", msgs) }, ShouldNotPanic)
+			So(func() { systemUpdateHandler(ctx, "sysupdate", msg) }, ShouldNotPanic)
 		})
 	})
 }

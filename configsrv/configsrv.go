@@ -38,27 +38,25 @@ var (
 	isCurrent     bool
 )
 
-func configHandler(ctx context.Context, stream string, msgs []interface{}) {
-	for _, v := range msgs {
-		switch v.(bson.M)["tag"] {
-		case "config":
-			currentConfig.mx.Lock()
-			//			s, err := json.Marshal(v.(bson.M))
-			//			if err != nil {
-			//				log.Println("ERROR reading config from repository.", err.Error())
-			//			}
-			currentConfig.config = v.(bson.M)
-			currentConfig.mx.Unlock()
-			if !isCurrent {
-				if currentConfig.lastID < v.(bson.M)["_id"].(bson.ObjectId).Hex() {
-					isCurrent = true
+func configHandler(ctx context.Context, stream string, v interface{}) {
+	switch v.(bson.M)["tag"] {
+	case "config":
+		currentConfig.mx.Lock()
+		//			s, err := json.Marshal(v.(bson.M))
+		//			if err != nil {
+		//				log.Println("ERROR reading config from repository.", err.Error())
+		//			}
+		currentConfig.config = v.(bson.M)
+		currentConfig.mx.Unlock()
+		if !isCurrent {
+			if currentConfig.lastID < v.(bson.M)["_id"].(bson.ObjectId).Hex() {
+				isCurrent = true
 
-				}
-			} else {
-				currentConfig.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 			}
-			break
+		} else {
+			currentConfig.lastID = v.(bson.M)["_id"].(bson.ObjectId).Hex()
 		}
+		break
 	}
 	if isCurrent {
 		fmt.Print("*")

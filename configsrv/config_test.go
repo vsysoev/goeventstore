@@ -21,7 +21,7 @@ const (
 	mongoURL string = "mongodb://127.0.0.1"
 )
 
-func Handler(ctx context.Context, stream string, msgs []interface{}) {
+func Handler(ctx context.Context, stream string, msg interface{}) {
 
 }
 func TestDropDatabase(t *testing.T) {

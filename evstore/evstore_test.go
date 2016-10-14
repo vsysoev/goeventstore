@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -24,6 +25,7 @@ type (
 )
 
 var (
+	m             sync.Mutex
 	scalarCounter int = 0
 	vectorCounter int = 0
 )
@@ -123,8 +125,10 @@ func TestListen2Interface(t *testing.T) {
 		So(err, ShouldBeNil)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 		defer cancel()
+		m.Lock()
 		scalarCounter = 100
 		vectorCounter = 100
+		m.Unlock()
 		go ev.Listenner2().Listen(ctx, "")
 		for i := 100; i < 200; i++ {
 			err = ev.Committer("scalars").SubmitEvent("", "scalar", "{\"value\":"+strconv.Itoa(i)+"}")
@@ -133,8 +137,10 @@ func TestListen2Interface(t *testing.T) {
 			So(err, ShouldBeNil)
 		}
 		<-time.After(1 * time.Second)
+		m.Lock()
 		So(scalarCounter, ShouldEqual, 0)
 		So(vectorCounter, ShouldEqual, 0)
+		m.Unlock()
 		ev.Close()
 	})
 }
@@ -284,10 +290,12 @@ func panicHandler(ctx context.Context, stream string, event interface{}) {
 	panic("panic Handler fired")
 }
 func scalarHandler(ctx context.Context, stream string, event interface{}) {
+	m.Lock()
 	switch stream {
 	case "scalars":
 		scalarCounter = scalarCounter - 1
 	case "vectors":
 		vectorCounter = vectorCounter - 1
 	}
+	m.Unlock()
 }
